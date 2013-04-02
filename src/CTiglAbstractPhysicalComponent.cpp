@@ -93,15 +93,20 @@ namespace tigl {
 
     TDF_Label CTiglAbstractPhysicalComponent::ExportDataStructure(Handle_XCAFDoc_ShapeTool &myAssembly, TDF_Label& label)
     {
+        // Define layer for the wing
+//        TDF_Label wingLabel= label.NewChild();
+//        Handle_XCAFDoc_ShapeTool hShapeTool = XCAFDoc_DocumentTool::ShapeTool(wingLabel);
+
         // This component
         TDF_Label aLabel = myAssembly->AddShape(GetLoft(), false);
         TDataStd_Name::Set (aLabel, GetUID().c_str());
+        Handle_XCAFDoc_ShapeTool hShapeTool = XCAFDoc_DocumentTool::ShapeTool(aLabel);
 
         // Other (sub)-components
         ChildContainerType::iterator it = childContainer.begin();
         for(; it != childContainer.end(); ++it){
             CTiglAbstractPhysicalComponent * pChild = *it;
-            if(pChild) TDF_Label newLabel = pChild->ExportDataStructure(myAssembly, aLabel);
+            if(pChild) TDF_Label newLabel = pChild->ExportDataStructure(hShapeTool, aLabel);
         }
 
         return aLabel;

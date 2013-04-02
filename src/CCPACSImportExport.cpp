@@ -41,6 +41,7 @@
 #include "IGESControl_Controller.hxx"
 #include "IGESCAFControl_Writer.hxx"
 #include "TDataStd_Name.hxx"
+#include "XCAFDoc_LayerTool.hxx"
 
 namespace tigl {
 
@@ -62,12 +63,14 @@ namespace tigl {
         Handle(XCAFApp_Application) hApp = XCAFApp_Application::GetApplication();
         Handle(TDocStd_Document) hDoc;
         hApp->NewDocument(TCollection_ExtendedString("MDTV-XCAF"), hDoc);
-        Handle_XCAFDoc_ShapeTool hShapeTool = XCAFDoc_DocumentTool::ShapeTool(hDoc->Main());
+        //Handle_XCAFDoc_ShapeTool hShapeTool = XCAFDoc_DocumentTool::ShapeTool(hDoc->Main());
         TDF_Label rootLabel= TDF_TagSource::NewChild(hDoc->Main());
 
+        Handle (XCAFDoc_LayerTool)     layers = XCAFDoc_DocumentTool::LayerTool (hDoc->Main());
+               TDF_Label wingLabel = layers->AddLayer("Base_LayerXX");
+               Handle_XCAFDoc_ShapeTool hShapeTool = XCAFDoc_DocumentTool::ShapeTool(wingLabel);
 
         CTiglUIDManager& uidManager = myConfig.GetUIDManager();
-
         CTiglAbstractPhysicalComponent* rootComponent = uidManager.GetRootComponent();
         if (rootComponent == NULL) {
             LOG(ERROR) << "Error: No Root Component";
@@ -76,7 +79,6 @@ namespace tigl {
 
         TDataStd_Name::Set (rootLabel, myConfig.GetUID().c_str());
         rootComponent->ExportDataStructure(hShapeTool, rootLabel);
-
 
         return hDoc;
     }

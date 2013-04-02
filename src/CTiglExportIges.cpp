@@ -169,6 +169,7 @@ namespace tigl {
 
            IGESControl_Controller::Init();
            IGESCAFControl_Writer writer;
+           writer.SetLayerMode(true);
            writer.Transfer(hDoc);
            writer.Write(filename.c_str());
        }

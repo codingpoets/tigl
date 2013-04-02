@@ -43,6 +43,7 @@
 #include "XCAFDoc_DocumentTool.hxx"
 #include "TDataStd_Name.hxx"
 #include "TDataXtd_Shape.hxx"
+#include "XCAFDoc_LayerTool.hxx"
 
 namespace {
 	inline double max(double a, double b){
@@ -265,14 +266,23 @@ namespace tigl {
     // Get segment count
     TDF_Label CCPACSWing::ExportDataStructure(Handle_XCAFDoc_ShapeTool &myAssembly, TDF_Label& label)
     {
-        TDF_Label wingLabel = CTiglAbstractPhysicalComponent::ExportDataStructure(myAssembly, label);
+        TDF_Label subWingLabel = CTiglAbstractPhysicalComponent::ExportDataStructure(myAssembly, label);
+
+        // Define layer for the wing
+        ///TDF_Label wingLabel= label.NewChild();
+        ///Handle_XCAFDoc_ShapeTool hShapeTool = XCAFDoc_DocumentTool::ShapeTool(wingLabel);
+        Handle (XCAFDoc_LayerTool)     layers = XCAFDoc_DocumentTool::LayerTool (label);
+       TDF_Label wingLabel = layers->AddLayer("Base_Layer");
+       Handle_XCAFDoc_ShapeTool hShapeTool = XCAFDoc_DocumentTool::ShapeTool(wingLabel);
 
         // Other (sub)-components
         for (int i=1; i <= segments.GetSegmentCount(); i++) {
             CCPACSWingSegment& segment = segments.GetSegment(i);
-            TDF_Label wingSegmentLabel = myAssembly->AddShape(segment.GetLoft(), false);
+            TDF_Label wingSegmentLabel = hShapeTool->AddShape(segment.GetLoft(), false);
             TDataStd_Name::Set (wingSegmentLabel, segment.GetUID().c_str());
             //TDF_Label& subSegmentLabel = segment.ExportDataStructure(myAssembly, wingSegmentLabel);
+
+            layers->SetLayer(segment.GetLoft(),wingLabel);
         }
 
         return wingLabel;
