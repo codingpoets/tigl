@@ -107,6 +107,43 @@ protected:
 TixiDocumentHandle WingSimple::tixiSimpleWingHandle = 0;
 TiglCPACSConfigurationHandle WingSimple::tiglSimpleWingHandle = 0;
 
+class WingSpecial : public ::testing::Test 
+{
+protected:
+    static void SetUpTestCase() 
+    {
+        const char* filename = "TestData/Wing_withWinglets.xml";
+        ReturnCode tixiRet;
+        TiglReturnCode tiglRet;
+
+        tiglSpecialWingHandle = -1;
+        tixiSpecialWingHandle = -1;
+
+        tixiRet = tixiOpenDocument(filename, &tixiSpecialWingHandle);
+        ASSERT_TRUE (tixiRet == SUCCESS);
+
+        tiglRet = tiglOpenCPACSConfiguration(tixiSpecialWingHandle, "D150modelID", &tiglSpecialWingHandle);
+        ASSERT_TRUE(tiglRet == TIGL_SUCCESS);
+    }
+
+    static void TearDownTestCase() 
+    {
+        ASSERT_TRUE(tiglCloseCPACSConfiguration(tiglSpecialWingHandle) == TIGL_SUCCESS);
+        ASSERT_TRUE(tixiCloseDocument(tixiSpecialWingHandle) == SUCCESS);
+        tiglSpecialWingHandle = -1;
+        tixiSpecialWingHandle = -1;
+    }
+
+    virtual void SetUp() {}
+    virtual void TearDown() {}
+
+
+    static TixiDocumentHandle           tixiSpecialWingHandle;
+    static TiglCPACSConfigurationHandle tiglSpecialWingHandle;
+};
+
+TixiDocumentHandle WingSpecial::tixiSpecialWingHandle = 0;
+TiglCPACSConfigurationHandle WingSpecial::tiglSpecialWingHandle = 0;
 /******************************************************************************/
 
 /**
@@ -307,5 +344,10 @@ TEST_F(WingSimple, wingGetReferenceArea_success)
     double ref = 0.;
     tiglWingGetReferenceArea(tiglSimpleWingHandle, 1, TIGL_X_Y_PLANE, &ref);
     ASSERT_NEAR(1.75, ref, 1e-7);
+}
 
+TEST_F(WingSpecial, wingGetMAC_success)
+{
+    double c_1, x_1, y_1, z_1;
+    ASSERT_EQ(TIGL_SUCCESS, tiglWingGetMAC(tiglSpecialWingHandle, "D150_wing_1ID", &c_1, &x_1, &y_1, &z_1));
 }

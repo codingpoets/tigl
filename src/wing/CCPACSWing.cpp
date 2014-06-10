@@ -564,10 +564,10 @@ double CCPACSWing::GetWingspan()
 
 /**
     * This function calculates location of the quarter of mean aerodynamic chord,
-    * and gives the chord lenght as well. It uses the classical method that can
+    * and gives the chord length as well. It uses the classical method that can
     * be applied to trapozaidal wings. This method is used for each segment.
     * The values are found by taking into account of sweep and dihedral.
-    * But the effect of insidance angle is neglected. These values should coincide
+    * But the effect of the angle of incidence is neglected. These values should coincide
     * with the values found with tornado tool.
     */
 void  CCPACSWing::GetWingMAC(double& mac_chord, double& mac_x, double& mac_y, double& mac_z)
