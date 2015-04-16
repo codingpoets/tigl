@@ -21,26 +21,38 @@
 
 #include "tigl_internal.h"
 #include "CCPACSWingShell.h"
+#include "CCPACSWingSpars.h"
 
 namespace tigl
 {
+
+class CCPACSWingComponentSegment;
 
 class CCPACSWingCSStructure
 {
 public:
     TIGL_EXPORT CCPACSWingCSStructure();
+
+    TIGL_EXPORT CCPACSWingCSStructure(CCPACSWingComponentSegment* aComponentSegment);
     
     TIGL_EXPORT void ReadCPACS(TixiDocumentHandle tixiHandle, const std::string& structureXPath);
     
     TIGL_EXPORT CCPACSWingShell& GetLowerShell();
     TIGL_EXPORT CCPACSWingShell& GetUpperShell();
-    
+    TIGL_EXPORT CCPACSWingSpars& GetSpars();
+    TIGL_EXPORT CCPACSWingComponentSegment& GetComponentSegment();
+
+    TIGL_EXPORT bool HasSpars() const;
+
     TIGL_EXPORT void Cleanup();
     TIGL_EXPORT void Invalidate();
     TIGL_EXPORT bool IsValid() const;
 private:
     CCPACSWingShell upperShell, lowerShell;
-    
+    CCPACSWingSpars spars;
+    CCPACSWingComponentSegment* componentSegment;
+
+    bool hasSpars;
     bool isvalid;
 };
 

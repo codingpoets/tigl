@@ -25,6 +25,14 @@ namespace tigl
 {
 
 CCPACSWingCSStructure::CCPACSWingCSStructure()
+    : spars(this)
+{
+    Cleanup();
+}
+
+CCPACSWingCSStructure::CCPACSWingCSStructure(CCPACSWingComponentSegment *aComponentSegment)
+    : componentSegment(aComponentSegment),
+      spars(this)
 {
     Cleanup();
 }
@@ -33,6 +41,7 @@ void CCPACSWingCSStructure::Cleanup()
 {
     upperShell.Reset();
     lowerShell.Reset();
+    spars.Reset();
     isvalid = false;
 }
 
@@ -57,6 +66,12 @@ void CCPACSWingCSStructure::ReadCPACS(TixiDocumentHandle tixiHandle, const std::
     if ( tixiCheckElement(tixiHandle, shellPath.c_str()) == SUCCESS){
         lowerShell.ReadCPACS(tixiHandle, shellPath.c_str());
     }
+
+    std::string tmpPath;
+    tmpPath = structureXPath + "/spars";
+    if ( tixiCheckElement(tixiHandle, tmpPath.c_str()) == SUCCESS){
+        spars.ReadCPACS(tixiHandle, tmpPath.c_str());
+    }
     
     isvalid = true;
 }
@@ -69,6 +84,21 @@ CCPACSWingShell& CCPACSWingCSStructure::GetLowerShell()
 CCPACSWingShell& CCPACSWingCSStructure::GetUpperShell()
 {
     return upperShell;
+}
+
+CCPACSWingSpars& CCPACSWingCSStructure::GetSpars()
+{
+    return spars;
+}
+
+bool CCPACSWingCSStructure::HasSpars() const
+{
+    return hasSpars;
+}
+
+CCPACSWingComponentSegment& CCPACSWingCSStructure::GetComponentSegment()
+{
+    return *componentSegment;
 }
 
 void CCPACSWingCSStructure::Invalidate()

@@ -72,7 +72,7 @@ public:
 
     // Gets a point in relative wing coordinates for a given eta and xsi
     TIGL_EXPORT gp_Pnt GetPoint(double eta, double xsi);
-        
+
     // Get the eta xsi coordinate from a segment point (given by seta, sxsi)
     TIGL_EXPORT void GetEtaXsiFromSegmentEtaXsi(const std::string &segmentUID, double seta, double sxsi, double &eta, double &xsi);
 
@@ -96,6 +96,8 @@ public:
 
     TIGL_EXPORT MaterialList GetMaterials(double eta, double xsi, TiglStructureType);
 
+    TIGL_EXPORT CCPACSWingCSStructure& GetStructure();
+
     // returns a list of segments that belong to this component segment
     TIGL_EXPORT SegmentList& GetSegmentList();
         
@@ -105,6 +107,10 @@ public:
     // calculates the intersection of a segment iso eta line with a component segment line (defined by its start and end point)
     // returns the xsi coordinate of the intersection
     TIGL_EXPORT void GetSegmentIntersection(const std::string& segmentUID, double csEta1, double csXsi1, double csEta2, double csXsi2, double eta, double& xsi);
+
+    // Signals if a structure is defined in the component segment
+    TIGL_EXPORT bool HasStructure() const;
+
 protected:
     // Cleanup routine
     void Cleanup(void);
@@ -155,6 +161,7 @@ private:
     Handle(Geom_Surface) lowerSurface;
     bool                 surfacesAreValid;
     CCPACSWingCSStructure structure;
+    bool                 hasStructure;
 
 };
 
