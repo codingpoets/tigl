@@ -488,6 +488,13 @@ void TIGLViewerDocument::drawAllFuselagesAndWings( )
             tigl::CCPACSWingSegment& segment = (tigl::CCPACSWingSegment &) wing.GetSegment(i);
             app->getScene()->displayShape(segment.GetLoft()->Shape());
         }
+        for (int i = 1; i <= wing.GetComponentSegmentCount(); i++) {
+            tigl::CCPACSWingComponentSegment& componentSegment = (tigl::CCPACSWingComponentSegment &) wing.GetComponentSegment(i);
+            if (componentSegment.HasStructure() && componentSegment.GetStructure().HasSpars()) {
+                app->getScene()->displayShape(componentSegment.GetStructure().GetSpars().GetLoft());
+            }
+        }
+
 
         if (wing.GetSymmetryAxis() == TIGL_NO_SYMMETRY) {
             continue;

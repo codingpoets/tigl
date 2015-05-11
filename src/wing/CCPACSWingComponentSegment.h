@@ -72,7 +72,7 @@ public:
 
     // Gets a point in relative wing coordinates for a given eta and xsi
     TIGL_EXPORT gp_Pnt GetPoint(double eta, double xsi);
-        
+
     // Get the eta xsi coordinate from a segment point (given by seta, sxsi)
     TIGL_EXPORT void GetEtaXsiFromSegmentEtaXsi(const std::string &segmentUID, double seta, double sxsi, double &eta, double &xsi);
 
@@ -95,6 +95,8 @@ public:
     TIGL_EXPORT TiglGeometricComponentType GetComponentType(){ return TIGL_COMPONENT_WINGCOMPSEGMENT | TIGL_COMPONENT_SEGMENT | TIGL_COMPONENT_LOGICAL; }
 
     TIGL_EXPORT MaterialList GetMaterials(double eta, double xsi, TiglStructureType);
+
+    TIGL_EXPORT CCPACSWingCSStructure& GetStructure();
 
     // returns a list of segments that belong to this component segment
     TIGL_EXPORT SegmentList& GetSegmentList();
@@ -162,6 +164,10 @@ public:
 
     // [[CAS_AES]] added method for checking whether segment is contained in componentSegment
     TIGL_EXPORT bool IsSegmentContained(const CCPACSWingSegment& segment) const;
+
+    // Signals if a structure is defined in the component segment
+    TIGL_EXPORT bool HasStructure() const;
+
 protected:
     // Cleanup routine
     void Cleanup(void);
@@ -223,6 +229,7 @@ private:
 
     bool                 surfacesAreValid;
     CCPACSWingCSStructure structure;
+    bool                 hasStructure;
 
 };
 

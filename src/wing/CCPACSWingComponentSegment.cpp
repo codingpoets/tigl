@@ -145,6 +145,7 @@ CCPACSWingComponentSegment::CCPACSWingComponentSegment(CCPACSWing* aWing, int aS
     : CTiglAbstractSegment(aSegmentIndex)
     , wing(aWing)
     , surfacesAreValid(false)
+    , structure(this)
 {
     Cleanup();
 }
@@ -230,6 +231,7 @@ void CCPACSWingComponentSegment::ReadCPACS(TixiDocumentHandle tixiHandle, const 
     tempString = segmentXPath + "/structure";
     elementPath   = const_cast<char*>(tempString.c_str());
     if (tixiCheckElement(tixiHandle, elementPath) == SUCCESS){
+        hasStructure = true;
         structure.ReadCPACS(tixiHandle, elementPath);
     }
 
@@ -784,6 +786,12 @@ double CCPACSWingComponentSegment::GetSurfaceArea(void)
 //        return profilePoint;
 //    }
 //
+
+// Returns the structure of this component segment
+CCPACSWingCSStructure& CCPACSWingComponentSegment::GetStructure()
+{
+    return structure;
+}
 
 // Gets the fromElementUID of this segment
 const std::string & CCPACSWingComponentSegment::GetFromElementUID(void) const
@@ -1393,6 +1401,11 @@ bool CCPACSWingComponentSegment::IsSegmentContained(const CCPACSWingSegment& seg
     }
 
     return isSegmentContained;
+}
+
+bool CCPACSWingComponentSegment::HasStructure() const
+{
+    return hasStructure;
 }
 
 } // end namespace tigl
