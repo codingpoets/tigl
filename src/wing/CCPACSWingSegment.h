@@ -89,10 +89,10 @@ public:
     TIGL_EXPORT const std::string& GetOuterSectionUID(void);
 
     // Returns the inner section element UID of this segment
-    TIGL_EXPORT const std::string& GetInnerSectionElementUID(void);
+    TIGL_EXPORT const std::string& GetInnerSectionElementUID(void) const;
 
     // Returns the outer section element UID of this segment
-    TIGL_EXPORT const std::string& GetOuterSectionElementUID(void);
+    TIGL_EXPORT const std::string& GetOuterSectionElementUID(void) const;
 
     // Returns the inner section index of this segment
     TIGL_EXPORT int GetInnerSectionIndex(void);

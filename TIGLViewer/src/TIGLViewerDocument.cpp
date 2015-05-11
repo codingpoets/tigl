@@ -497,6 +497,15 @@ void TIGLViewerDocument::drawAllFuselagesAndWings( )
             tigl::CCPACSWingSegment& segment = (tigl::CCPACSWingSegment &) wing.GetSegment(i);
             app->getScene()->displayShape(segment.GetMirroredLoft()->Shape(), Quantity_NOC_MirrShapeCol);
         }
+
+        for (int i = 1; i <= wing.GetComponentSegmentCount(); i++) {
+            tigl::CCPACSWingComponentSegment& componentSegment = (tigl::CCPACSWingComponentSegment &) wing.GetComponentSegment(i);
+            TopoDS_Wire compSegLine = componentSegment.GetCSLine(0.1, 0.25, 0.8, 0.55);
+            app->getScene()->displayShape(compSegLine);
+            TopoDS_Shape midplane = componentSegment.GetMidplaneShape();
+            app->getScene()->displayShape(midplane);
+
+        }
     }
 
     // Draw all fuselages

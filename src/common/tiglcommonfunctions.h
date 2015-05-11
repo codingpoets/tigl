@@ -84,4 +84,13 @@ TIGL_EXPORT void GetShapeExtension(const TopoDS_Shape& shape,
 // Returns a unique Hashcode for a specific geometric component based on its loft
 TIGL_EXPORT int GetComponentHashCode(tigl::ITiglGeometricComponent&);
 
+// Method for building a face out of 4 points
+TIGL_EXPORT TopoDS_Face BuildFace(const gp_Pnt& p1, const gp_Pnt& p2, const gp_Pnt& p3, const gp_Pnt& p4);
+
+// Method for finding the intersection point of a face and an edge
+TIGL_EXPORT bool GetIntersectionPoint(const TopoDS_Face& face, const TopoDS_Edge& edge, gp_Pnt& dst);
+
+// Method for finding the intersection point of a face and a wire (containing edges)
+TIGL_EXPORT bool GetIntersectionPoint(const TopoDS_Face& face, const TopoDS_Wire& wire, gp_Pnt& dst);
+
 #endif // TIGLCOMMONFUNCTIONS_H

@@ -101,10 +101,67 @@ public:
         
     // creates an (iso) component segment line 
     TIGL_EXPORT TopoDS_Wire GetCSLine(double eta1, double xsi1, double eta2, double xsi2, int NSTEPS=101);
-        
+
+    // creates a straight line between two eta xsi coordinates
+    TIGL_EXPORT TopoDS_Edge GetEtaXsiLine(double eta1, double xsi1, double eta2, double xsi2);
+
     // calculates the intersection of a segment iso eta line with a component segment line (defined by its start and end point)
     // returns the xsi coordinate of the intersection
     TIGL_EXPORT void GetSegmentIntersection(const std::string& segmentUID, double csEta1, double csXsi1, double csEta2, double csXsi2, double eta, double& xsi);
+
+    // Helper method for getting the start segment index
+    TIGL_EXPORT int GetStartSegmentIndex();
+
+    // Return the shape for the componentsegment midplane
+    TIGL_EXPORT TopoDS_Shape GetMidplaneShape();
+
+    // [[CAS_AES]] added getter for midplane point
+    TIGL_EXPORT gp_Pnt GetMidplanePoint(double eta, double xsi);
+
+    // [[CAS_AES]] added getter for eta direction of midplane (no
+    //             X-component)
+    TIGL_EXPORT gp_Vec GetMidplaneEtaDir(double eta) const;
+
+    // [[CAS_AES]] added getter for midplane normal vector
+    TIGL_EXPORT gp_Vec GetMidplaneNormal(double eta);
+
+    // [[CAS_AES]] added getter for the normalized leading edge direction
+    TIGL_EXPORT gp_Vec GetLeadingEdgeDirection(const std::string& segmentUID) const;
+    TIGL_EXPORT gp_Vec GetLeadingEdgeDirection(const gp_Pnt& point, const std::string& defaultSegmentUID = "") const;
+
+    // [[CAS_AES]] added getter for the normalized trailing edge direction
+    TIGL_EXPORT gp_Vec GetTrailingEdgeDirection(const std::string& segmentUID) const;
+    TIGL_EXPORT gp_Vec GetTrailingEdgeDirection(const gp_Pnt& point, const std::string& defaultSegmentUID = "") const;
+
+    // [[CAS_AES]] added getter for the normalized leading edge direction in the YZ plane
+    TIGL_EXPORT gp_Vec GetLeadingEdgeDirectionYZ(const std::string& segmentUID) const;
+    TIGL_EXPORT gp_Vec GetLeadingEdgeDirectionYZ(const gp_Pnt& point, const std::string& defaultSegmentUID = "") const;
+
+    // [[CAS_AES]] added getter for leading edge point
+    TIGL_EXPORT gp_Pnt GetLeadingEdgePoint(double eta) const;
+
+    // [[CAS_AES]] added getter for trailing edge point
+    TIGL_EXPORT gp_Pnt GetTrailingEdgePoint(double eta) const;
+
+    // [[CAS_AES]] added getter for inner chordline point
+    TIGL_EXPORT gp_Pnt GetInnerChordlinePoint(double xsi) const;
+
+    // [[CAS_AES]] added getter for outer chordline point
+    TIGL_EXPORT gp_Pnt GetOuterChordlinePoint(double xsi) const;
+
+    // Returns the segment to a given point on the componentSegment.
+    // Returns null if the point is not an that wing!
+    // [[CAS_AES]] added const
+    TIGL_EXPORT const std::string findSegment(double x, double y, double z) const;
+
+    // [[CAS_AES]] added getter for inner segment UID
+    TIGL_EXPORT std::string GetInnerSegmentUID() const;
+
+    // [[CAS_AES]] added getter for outer segment UID
+    TIGL_EXPORT std::string GetOuterSegmentUID() const;
+
+    // [[CAS_AES]] added method for checking whether segment is contained in componentSegment
+    TIGL_EXPORT bool IsSegmentContained(const CCPACSWingSegment& segment) const;
 protected:
     // Cleanup routine
     void Cleanup(void);
@@ -114,6 +171,9 @@ protected:
 
     // Builds the loft between the two segment sections
     PNamedShape BuildLoft(void);
+
+    // [[CAS_AES]] added method for building wires for eta-, leading edge-, trailing edge-lines
+    void BuildLines(void);
 
     // Returns an upper or lower point on the segment surface in
     // dependence of parameters eta and xsi, which range from 0.0 to 1.0.
@@ -153,6 +213,14 @@ private:
     SegmentList          wingSegments;         /**< List of segments belonging to the component segment */
     Handle(Geom_Surface) upperSurface;
     Handle(Geom_Surface) lowerSurface;
+    // [[CAS_AES]] added wires used for eta/xsi computations
+    TopoDS_Wire          etaLine;                  // 2d version (in YZ plane) of leadingEdgeLine
+    TopoDS_Wire          extendedEtaLine;          // 2d version (in YZ plane) of extendedLeadingEdgeLine
+    TopoDS_Wire          leadingEdgeLine;          // leading edge as wire
+    TopoDS_Wire          extendedLeadingEdgeLine;  // leading edge extended along y-axis, see CPACS spar geometry definition
+    TopoDS_Wire          trailingEdgeLine;         // trailing edge as wire
+    TopoDS_Wire          extendedTrailingEdgeLine; // trailing edge extended along y-axis, see CPACS spar geometry definition
+
     bool                 surfacesAreValid;
     CCPACSWingCSStructure structure;
 

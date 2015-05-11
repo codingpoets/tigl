@@ -21,6 +21,7 @@
  * data structures.
  */
 
+#include <limits>
 #include "tiglcommonfunctions.h"
 
 #include "CTiglError.h"
@@ -54,6 +55,8 @@
 #include "BRepBuilderAPI_Sewing.hxx"
 #include "Bnd_Box.hxx"
 #include "BRepBndLib.hxx"
+#include "BRepFill.hxx"
+#include "BRepExtrema_ExtCF.hxx"
 
 #include <Geom2d_Curve.hxx>
 #include <Geom2d_Line.hxx>
@@ -445,4 +448,52 @@ Handle_Geom_BSplineCurve GetBSplineCurve(const TopoDS_Edge& e)
     // convert to bspline
     Handle_Geom_BSplineCurve bspl =  GeomConvert::CurveToBSplineCurve(curve);
     return bspl;
+}
+
+TopoDS_Face BuildFace(const gp_Pnt& p1, const gp_Pnt& p2, const gp_Pnt& p3, const gp_Pnt& p4)
+{
+    BRepBuilderAPI_MakeEdge me1(p1, p2);
+    TopoDS_Edge e1 = me1.Edge();
+    BRepBuilderAPI_MakeEdge me2(p3, p4);
+    TopoDS_Edge e2 = me2.Edge();
+
+    TopoDS_Face face = BRepFill::Face(e1, e2);
+    return face;
+}
+
+// Method for finding the intersection point of a face and an edge
+bool GetIntersectionPoint(const TopoDS_Face& face, const TopoDS_Edge& edge, gp_Pnt& dst)
+{
+    BRepExtrema_ExtCF edgeFaceIntersect(edge, face);
+    if (!edgeFaceIntersect.IsDone()) {
+        throw tigl::CTiglError("Error intersecting edge and face in CTiglCommon::getIntersectionPoint!");
+    }
+    double minDistance = std::numeric_limits<double>::max();
+    int minIndex = 0;
+    for (int i=1; i <= edgeFaceIntersect.NbExt(); i++) {
+        double distance = edgeFaceIntersect.SquareDistance(i);
+        if (distance < minDistance) {
+            minDistance = distance;
+            minIndex = i;
+        }
+    }
+
+    if (minDistance <= Precision::Confusion()) {
+        dst = edgeFaceIntersect.PointOnEdge(minIndex);
+        return true;
+    }
+    return false;
+}
+
+// Method for finding the intersection point of a face and a wire (containing edges)
+bool GetIntersectionPoint(const TopoDS_Face& face, const TopoDS_Wire& wire, gp_Pnt& dst)
+{
+    BRepTools_WireExplorer wireExp;
+    for (wireExp.Init(wire); wireExp.More(); wireExp.Next()) {
+        const TopoDS_Edge& edge = wireExp.Current();
+        if (GetIntersectionPoint(face, edge, dst)) {
+            return true;
+        }
+    }
+    return false;
 }

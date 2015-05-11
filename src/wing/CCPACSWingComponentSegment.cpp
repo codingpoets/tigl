@@ -64,6 +64,12 @@
 #include "TColgp_Array1OfPnt.hxx"
 #include <TopExp.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
+#include "BRepAdaptor_CompCurve.hxx"
+#include "GCPnts_AbscissaPoint.hxx"
+#include "BRepBndLib.hxx"
+#include "Geom_TrimmedCurve.hxx"
+#include "GC_MakeSegment.hxx"
+
 
 namespace tigl
 {
@@ -313,6 +319,17 @@ TopoDS_Wire CCPACSWingComponentSegment::GetCSLine(double eta1, double xsi1, doub
         old_point = point;
     }
     return wireBuilder.Wire();
+}
+
+TopoDS_Edge CCPACSWingComponentSegment::GetEtaXsiLine(double eta1, double xsi1, double eta2, double xsi2)
+{
+    gp_Pnt p1 = GetPoint(eta1, xsi1);
+    gp_Pnt p2 = GetPoint(eta2, xsi2);
+
+    BRepBuilderAPI_MakeEdge edgeBuilder(p1, p2);
+
+    return edgeBuilder.Edge();
+
 }
     
 void CCPACSWingComponentSegment::GetSegmentIntersection(const std::string& segmentUID, double csEta1, double csXsi1, double csEta2, double csXsi2, double eta, double &xsi)
@@ -823,6 +840,34 @@ const CTiglAbstractSegment* CCPACSWingComponentSegment::findSegment(double x, do
     return result;
 }
 
+// [[CAS_AES]] added getter for inner segment UID
+std::string CCPACSWingComponentSegment::GetInnerSegmentUID() const {
+    std::string uid;
+    for (int i = 1; i <= wing->GetSegmentCount(); i++) {
+        tigl::CCPACSWingSegment& segment = (tigl::CCPACSWingSegment &) wing->GetSegment(i);
+        // Check for the inner wing segment
+        if (segment.GetInnerSectionElementUID() == fromElementUID) {
+            uid = segment.GetUID();
+            break;
+        }
+    }
+    return uid;
+}
+
+// [[CAS_AES]] added getter for outer segment UID
+std::string CCPACSWingComponentSegment::GetOuterSegmentUID() const {
+    std::string uid;
+    for (int i = 1; i <= wing->GetSegmentCount(); i++) {
+        tigl::CCPACSWingSegment& segment = (tigl::CCPACSWingSegment &) wing->GetSegment(i);
+        // Check for the inner wing segment
+        if (segment.GetOuterSectionElementUID() == toElementUID) {
+            uid = segment.GetUID();
+            break;
+        }
+    }
+    return uid;
+}
+
 MaterialList CCPACSWingComponentSegment::GetMaterials(double eta, double xsi, TiglStructureType type)
 {
     MaterialList list;
@@ -857,6 +902,497 @@ MaterialList CCPACSWingComponentSegment::GetMaterials(double eta, double xsi, Ti
         
     }
     return list;
+}
+
+int CCPACSWingComponentSegment::GetStartSegmentIndex()
+{
+    int startSegmentIndex = 0;
+    int segmentCount = wing->GetSegmentCount();
+    for (int i=1; i <= segmentCount; i++)
+    {
+        CCPACSWingSegment& segment = (CCPACSWingSegment&) wing->GetSegment(i);
+        if (segment.GetInnerSectionElementUID() == fromElementUID)
+        {
+            startSegmentIndex = i;
+            break;
+        }
+    }
+    return startSegmentIndex;
+}
+
+TopoDS_Shape CCPACSWingComponentSegment::GetMidplaneShape()
+{
+    int startSegmentIndex = GetStartSegmentIndex();
+    int numWingSegments = wing->GetSegmentCount();
+
+    BRep_Builder builder;
+    TopoDS_Compound midplaneShape;
+    builder.MakeCompound(midplaneShape);
+
+    for (int i = startSegmentIndex; i <= numWingSegments; i++)
+    {
+        CCPACSWingSegment& segment = (CCPACSWingSegment&) wing->GetSegment(i);
+
+        gp_Pnt innerLePnt = segment.GetChordPoint(0, 0);
+        gp_Pnt innerTePnt = segment.GetChordPoint(0, 1);
+        gp_Pnt outerLePnt = segment.GetChordPoint(1, 0);
+        gp_Pnt outerTePnt = segment.GetChordPoint(1, 1);
+
+        TopoDS_Face face = BuildFace(innerLePnt, innerTePnt, outerLePnt, outerTePnt);
+        builder.Add(midplaneShape, face);
+
+        // stop at last segment of componentSegment
+        if (segment.GetOuterSectionElementUID() == toElementUID)
+        {
+            break;
+        }
+    }
+    return midplaneShape;
+}
+
+// [[CAS_AES]] added method for midplane points
+// returns the midplane points relative to wing coordinate system
+// this method uses the eta/xsi definition for Spars, which uses the extended eta line
+// see spars definition in CPACS documentation for details
+// BUG #223: in case eta==0 or eta==1 the method returns the chordline points
+gp_Pnt CCPACSWingComponentSegment::GetMidplanePoint(double eta, double xsi)
+{
+    Update();
+
+    if (eta < 0.0 || eta > 1.0)
+    {
+        throw CTiglError("Error: Parameter eta not in the range 0.0 <= eta <= 1.0 in CCPACSWingComponentSegment::GetMidplanePoint", TIGL_ERROR);
+    }
+    if (xsi < 0.0 || xsi > 1.0)
+    {
+        throw CTiglError("Error: Parameter xsi not in the range 0.0 <= xsi <= 1.0 in CCPACSWingComponentSegment::GetMidplanePoint", TIGL_ERROR);
+    }
+
+    // BUG #223: fix for eta==0 or eta==1
+    if (eta <= Precision::Confusion())
+    {
+        return GetInnerChordlinePoint(xsi);
+    }
+    if (eta >= (1-Precision::Confusion()))
+    {
+        return GetOuterChordlinePoint(xsi);
+    }
+
+    // get point on eta line
+    gp_Pnt etaPnt;
+    gp_Vec etaDir;
+    BRepAdaptor_CompCurve etaLineCurve(extendedEtaLine, Standard_True);
+    Standard_Real len = GCPnts_AbscissaPoint::Length( etaLineCurve );
+    etaLineCurve.D1( len * eta, etaPnt, etaDir );
+
+    // get bounding box of leading edge line
+    Bnd_Box bbox;
+    BRepBndLib::Add(extendedLeadingEdgeLine, bbox);
+    double xmin, xmax, temp;
+    bbox.Get(xmin, temp, temp, xmax, temp, temp);
+
+    // compute line along x-axis from eta-point and find intersection point on leading edge line
+    Handle(Geom_TrimmedCurve) ray = GC_MakeSegment(gp_Pnt(xmin, etaPnt.Y(), etaPnt.Z()), gp_Pnt(xmax, etaPnt.Y(), etaPnt.Z()));
+    BRepBuilderAPI_MakeEdge me(ray);
+    TopoDS_Shape rayShape(me.Edge());
+    // find intersection point on leading edge line, use minimum distance for stability
+    BRepExtrema_DistShapeShape extrema(extendedLeadingEdgeLine, rayShape);
+    extrema.Perform();
+    gp_Pnt lePnt = extrema.PointOnShape1(1);
+
+    // shortcut in case leading edge point is requested
+    if (xsi == 0) {
+        return lePnt;
+    }
+
+    // TODO: add support for closed wing (multiple points for single Y-coordinate)
+    // determine up-vector for intersection face for cutting trailing edge
+    gp_Pnt intersectPoint;
+    gp_Pln plane(lePnt, etaDir);
+    TopoDS_Face intersectFace = BRepBuilderAPI_MakeFace(plane).Face();
+    if (!GetIntersectionPoint(intersectFace, extendedTrailingEdgeLine, intersectPoint)) {
+        throw CTiglError("Unable to find trailing edge point in CCPACSWingComponentSegment::getMidplanePoint!");
+    }
+    gp_Pnt tePnt = intersectPoint;
+
+    // xsi line
+    TopoDS_Edge xsiEdge = BRepBuilderAPI_MakeEdge(lePnt, tePnt);
+    TopoDS_Wire xsiLine = BRepBuilderAPI_MakeWire(xsiEdge);
+    // get point on xsi line
+    gp_Pnt xsiPnt;
+    BRepAdaptor_CompCurve xsiLineCurve(xsiLine, Standard_True);
+    len = GCPnts_AbscissaPoint::Length( xsiLineCurve );
+    xsiLineCurve.D0( len * xsi, xsiPnt );
+
+    return xsiPnt;
+}
+
+// [[CAS_AES]] added getter for eta direction of midplane
+gp_Vec CCPACSWingComponentSegment::GetMidplaneEtaDir(double eta) const {
+    // get point on eta line
+    gp_Pnt etaPnt;
+    gp_Vec etaDir;
+    BRepAdaptor_CompCurve extendedEtaLineCurve(extendedEtaLine, Standard_True);
+    Standard_Real len = GCPnts_AbscissaPoint::Length( extendedEtaLineCurve );
+    extendedEtaLineCurve.D1( len * eta, etaPnt, etaDir );
+    return etaDir.Normalized();
+}
+
+// [[CAS_AES]] added getter for midplane normal vector
+gp_Vec CCPACSWingComponentSegment::GetMidplaneNormal(double eta) {
+
+    Update();
+
+    if (eta < 0.0 || eta > 1.0)
+    {
+        throw CTiglError("Error: Parameter eta not in the range 0.0 <= eta <= 1.0 in CCPACSWingComponentSegment::GetMidplanePoint", TIGL_ERROR);
+    }
+
+    gp_Pnt lePnt = GetMidplanePoint(eta, 0);
+    gp_Pnt tePnt = GetMidplanePoint(eta, 1);
+    gp_Vec etaDir = GetMidplaneEtaDir(eta);
+    gp_Vec chordLine(lePnt, tePnt);
+    gp_Vec normal = chordLine.Normalized().Crossed(etaDir);
+    return normal;
+}
+
+// [[CAS_AES]] added getter for the normalized leading edge direction
+gp_Vec CCPACSWingComponentSegment::GetLeadingEdgeDirection(const std::string& segmentUID) const {
+    tigl::CCPACSWingSegment& segment = (tigl::CCPACSWingSegment &) wing->GetSegment(segmentUID);
+    gp_Pnt pl0 = segment.GetPoint(0, 0, false);
+    gp_Pnt pl1 = segment.GetPoint(1, 0, false);
+
+    // get the normalized leading edge vector
+    gp_Vec lev(pl0, pl1);
+    lev.Normalize();
+    return lev;
+}
+
+// [[CAS_AES]] added getter for the normalized leading edge direction
+//             Parameter defaultSegmentUID can be used for inner/outer segment when point is in extended volume
+gp_Vec CCPACSWingComponentSegment::GetLeadingEdgeDirection(const gp_Pnt& point, const std::string& defaultSegmentUID) const {
+    gp_Pnt globalPnt = wing->GetWingTransformation().Transform(point);
+
+    std::string segmentUID = findSegment(globalPnt.X(), globalPnt.Y(), globalPnt.Z());
+    if (segmentUID == "") {
+        segmentUID = defaultSegmentUID;
+    }
+    return GetLeadingEdgeDirection(segmentUID);
+}
+
+// [[CAS_AES]] added getter for the normalized trailing edge direction
+gp_Vec CCPACSWingComponentSegment::GetTrailingEdgeDirection(const std::string& segmentUID) const {
+    tigl::CCPACSWingSegment& segment = (tigl::CCPACSWingSegment &) wing->GetSegment(segmentUID);
+    gp_Pnt pt0 = segment.GetPoint(0, 1, false);
+    gp_Pnt pt1 = segment.GetPoint(1, 1, false);
+
+    // get the normalized trailing edge vector
+    gp_Vec tev(pt0, pt1);
+    tev.Normalize();
+    return tev;
+}
+
+// [[CAS_AES]] added getter for the normalized trailing edge direction
+//             Parameter defaultSegmentUID can be used for inner/outer segment when point is in extended volume
+gp_Vec CCPACSWingComponentSegment::GetTrailingEdgeDirection(const gp_Pnt& point, const std::string& defaultSegmentUID) const {
+    gp_Pnt globalPnt = wing->GetWingTransformation().Transform(point);
+
+    std::string segmentUID = findSegment(globalPnt.X(), globalPnt.Y(), globalPnt.Z());
+    if (segmentUID == "") {
+        segmentUID = defaultSegmentUID;
+    }
+    return GetTrailingEdgeDirection(segmentUID);
+}
+
+// [[CAS_AES]] added getter for the normalized leading edge direction in the YZ plane
+gp_Vec CCPACSWingComponentSegment::GetLeadingEdgeDirectionYZ(const std::string& segmentUID) const {
+    gp_Vec lev = GetLeadingEdgeDirection(segmentUID);
+    lev.SetX(0);
+    lev.Normalize();
+    return lev;
+}
+
+// [[CAS_AES]] added getter for the normalized leading edge direction in the YZ plane
+//             Parameter defaultSegmentUID can be used for inner/outer segment when point is in extended volume
+gp_Vec CCPACSWingComponentSegment::GetLeadingEdgeDirectionYZ(const gp_Pnt& point, const std::string& defaultSegmentUID) const {
+    gp_Vec lev = GetLeadingEdgeDirection(point, defaultSegmentUID);
+    lev.SetX(0);
+    lev.Normalize();
+    return lev;
+}
+
+
+// [[CAS_AES]] added method for building wires for eta-, leading edge-, trailing edge-lines
+void CCPACSWingComponentSegment::BuildLines(void)
+{
+    // search for ETA coordinate
+    std::vector<gp_Pnt> lePointContainer;
+    std::vector<gp_Pnt> tePointContainer;
+    gp_Pnt extendedInnerLePoint;
+    gp_Pnt extendedOuterLePoint;
+    gp_Pnt extendedInnerTePoint;
+    gp_Pnt extendedOuterTePoint;
+
+    gp_Pnt pnt;
+    int numberOfSections = 0;
+
+    // get the leading and trailing edge points of all sections
+    bool inComponentSection = false;
+    for (int i = 1; i <= wing->GetSegmentCount(); i++)
+    {
+        tigl::CCPACSWingSegment& segment = (tigl::CCPACSWingSegment &) wing->GetSegment(i);
+
+        // Ok, we found the first segment of this componentSegment
+        if(!inComponentSection && segment.GetInnerSectionElementUID() == fromElementUID) {
+            inComponentSection = true;
+        }
+
+        if (inComponentSection) {
+            // store number of sections (for number of points per line)
+            numberOfSections++;
+
+            // get leading edge point
+            pnt = segment.GetPoint(0, 0, true);
+            lePointContainer.push_back(pnt);
+            // get trailing edge point
+            pnt = segment.GetPoint(0, 1, true);
+            tePointContainer.push_back(pnt);
+
+            // if we found the outer section, break...
+            if( (segment.GetOuterSectionElementUID() == toElementUID)) {
+                numberOfSections++;
+                // get leading edge point
+                pnt = segment.GetPoint(1, 0, true);
+                lePointContainer.push_back(pnt);
+                // get trailing edge point
+                pnt = segment.GetPoint(1, 1, true);
+                tePointContainer.push_back(pnt);
+                break;
+            }
+        }
+    }
+
+    // determine extended leading/trailing edge points
+    // scale leading or trailing edge to get both points in the section planes of the
+    // inner and outer sections
+    // see CPACS documentation for "componentSegment" element
+    extendedInnerLePoint = lePointContainer.at(0);
+    extendedInnerTePoint = tePointContainer.at(0);
+    extendedOuterLePoint = lePointContainer.at(lePointContainer.size() - 1);
+    extendedOuterTePoint = tePointContainer.at(tePointContainer.size() - 1);
+    std::string innerSegmentUID = GetInnerSegmentUID();
+    std::string outerSegmentUID = GetOuterSegmentUID();
+    gp_Vec innerLeDirYZ = GetLeadingEdgeDirectionYZ(innerSegmentUID);
+    gp_Vec outerLeDirYZ = GetLeadingEdgeDirectionYZ(outerSegmentUID);
+    gp_Vec innerChordVec(extendedInnerTePoint, extendedInnerLePoint);
+
+    // compute length of chord line vector projected to eta line vector
+    double lp = innerChordVec.Dot(innerLeDirYZ);
+    // check if projection of chord line vector points in direction or in opposite direction of eta line vector
+    if (lp > Precision::Confusion()) {
+        // scale leading edge
+        gp_Vec innerLeDir = GetLeadingEdgeDirection(innerSegmentUID);
+        // compute cosine of angle between leading edge vector and eta line vector
+        double cosPhi = innerLeDir.Dot(innerLeDirYZ);
+        // compute the length value for extending the leading edge
+        double length = lp / cosPhi;
+        extendedInnerLePoint.Translate(-1.0 * innerLeDir * length);
+    } else if (lp < -Precision::Confusion()) {
+        // scale trailing edge
+        gp_Vec innerTeDir = GetTrailingEdgeDirection(innerSegmentUID);
+        // compute cosine of angle between trailing edge vector and eta line vector
+        double cosPhi = innerTeDir.Dot(innerLeDirYZ);
+        // compute the length value for extending the trailing edge
+        double length = -1.0 * (lp / cosPhi);
+        extendedInnerTePoint.Translate(-1.0 * innerTeDir * length);
+    }
+    gp_Vec outerChordVec(extendedOuterTePoint, extendedOuterLePoint);
+    // compute length of chord line vector projected to eta line vector
+    lp = outerChordVec.Dot(outerLeDirYZ);
+    // check if projection of chord line vector points in direction or in opposite direction of eta line vector
+    if (lp > Precision::Confusion()) {
+        // scale trailing edge
+        gp_Vec outerTeDir = GetTrailingEdgeDirection(outerSegmentUID);
+        // compute cosine of angle between trailing edge vector and eta line vector
+        double cosPhi = outerTeDir.Dot(outerLeDirYZ);
+        // compute the length value for extending the trailing edge
+        double length = lp / cosPhi;
+        extendedOuterTePoint.Translate(outerTeDir * length);
+    } else if (lp < -Precision::Confusion()) {
+        // scale leading edge
+        gp_Vec outerLeDir = GetLeadingEdgeDirection(outerSegmentUID);
+        // compute cosine of angle between leading edge vector and eta line vector
+        double cosPhi = outerLeDir.Dot(outerLeDirYZ);
+        // compute the length value for extending the leading edge
+        double length = -1.0 * (lp / cosPhi);
+        extendedOuterLePoint.Translate(outerLeDir * length);
+    }
+
+#ifdef _DEBUG
+    innerChordVec = gp_Vec(extendedInnerTePoint, extendedInnerLePoint);
+    outerChordVec = gp_Vec(extendedOuterTePoint, extendedOuterLePoint);
+    lp = innerChordVec.Dot(innerLeDirYZ);
+    assert(fabs(lp) < Precision::Confusion());
+    lp = outerChordVec.Dot(outerLeDirYZ);
+    assert(fabs(lp) < Precision::Confusion());
+#endif
+
+    // build wires: etaLine, extendedEtaLine, leadingEdgeLine, extendedLeadingEdgeLine,
+    //              trailingEdgeLine, extendedTrailingEdgeLine
+    BRepBuilderAPI_MakeWire wbEta, wbExtEta, wbLe, wbExtLe, wbTe, wbExtTe;
+    gp_Pnt innerLePoint, outerLePoint, innerPoint2d, outerPoint2d, innerTePoint, outerTePoint;
+    TopoDS_Edge leEdge, etaEdge, teEdge, extLeEdge, extEtaEdge, extTeEdge;
+    for (int i = 1; i < numberOfSections; i++)
+    {
+        innerLePoint = lePointContainer[i-1];
+        outerLePoint = lePointContainer[i];
+        innerPoint2d = gp_Pnt(0, innerLePoint.Y(), innerLePoint.Z());
+        outerPoint2d = gp_Pnt(0, outerLePoint.Y(), outerLePoint.Z());
+        innerTePoint = tePointContainer[i-1];
+        outerTePoint = tePointContainer[i];
+        leEdge = BRepBuilderAPI_MakeEdge(innerLePoint, outerLePoint);
+        etaEdge = BRepBuilderAPI_MakeEdge(innerPoint2d, outerPoint2d);
+        teEdge = BRepBuilderAPI_MakeEdge(innerTePoint, outerTePoint);
+        if (i == 1) {
+            innerLePoint = extendedInnerLePoint;
+            innerPoint2d = gp_Pnt(0, innerLePoint.Y(), innerLePoint.Z());
+            innerTePoint = extendedInnerTePoint;
+        }
+        if (i == numberOfSections - 1) {
+            outerLePoint = extendedOuterLePoint;
+            outerPoint2d = gp_Pnt(0, outerLePoint.Y(), outerLePoint.Z());
+            outerTePoint = extendedOuterTePoint;
+        }
+        extLeEdge = BRepBuilderAPI_MakeEdge(innerLePoint, outerLePoint);
+        extEtaEdge = BRepBuilderAPI_MakeEdge(innerPoint2d, outerPoint2d);
+        extTeEdge = BRepBuilderAPI_MakeEdge(innerTePoint, outerTePoint);
+        wbLe.Add(leEdge);
+        wbEta.Add(etaEdge);
+        wbTe.Add(teEdge);
+        wbExtLe.Add(extLeEdge);
+        wbExtEta.Add(extEtaEdge);
+        wbExtTe.Add(extTeEdge);
+    }
+    leadingEdgeLine = wbLe.Wire();
+    etaLine = wbEta.Wire();
+    trailingEdgeLine = wbTe.Wire();
+    extendedLeadingEdgeLine = wbExtLe.Wire();
+    extendedEtaLine = wbExtEta.Wire();
+    extendedTrailingEdgeLine = wbExtTe.Wire();
+}
+
+// [[CAS_AES]] added getter for leading edge point
+gp_Pnt CCPACSWingComponentSegment::GetLeadingEdgePoint(double eta) const {
+    // get point on leading edge line
+    gp_Pnt lePnt;
+    BRepAdaptor_CompCurve leLineCurve(leadingEdgeLine, Standard_True);
+    Standard_Real len = GCPnts_AbscissaPoint::Length( leLineCurve );
+    leLineCurve.D0( len * eta, lePnt );
+
+    return lePnt;
+}
+
+// [[CAS_AES]] added getter for trailing edge point
+gp_Pnt CCPACSWingComponentSegment::GetTrailingEdgePoint(double eta) const {
+    // get point on trailing edge line
+    gp_Pnt tePnt;
+    BRepAdaptor_CompCurve teLineCurve(trailingEdgeLine, Standard_True);
+    Standard_Real len = GCPnts_AbscissaPoint::Length( teLineCurve );
+    teLineCurve.D0( len * eta, tePnt );
+
+    return tePnt;
+}
+
+// [[CAS_AES]] added getter for inner chordline point
+gp_Pnt CCPACSWingComponentSegment::GetInnerChordlinePoint(double xsi) const
+{
+    gp_Pnt lePnt = GetLeadingEdgePoint(0);
+    gp_Pnt tePnt = GetTrailingEdgePoint(0);
+    gp_Vec chordLine(lePnt, tePnt);
+    gp_Pnt result = lePnt.Translated(chordLine.Multiplied(xsi));
+    return result;
+}
+
+// [[CAS_AES]] added getter for outer chordline point
+gp_Pnt CCPACSWingComponentSegment::GetOuterChordlinePoint(double xsi) const
+{
+    gp_Pnt lePnt = GetLeadingEdgePoint(1);
+    gp_Pnt tePnt = GetTrailingEdgePoint(1);
+    gp_Vec chordLine(lePnt, tePnt);
+    gp_Pnt result = lePnt.Translated(chordLine.Multiplied(xsi));
+    return result;
+}
+
+// Returns the segment to a given point on the componentSegment.
+// Returns null if the point is not an that wing!
+// [[CAS_AES]] added const
+const std::string CCPACSWingComponentSegment::findSegment(double x, double y, double z) const
+{
+    int i = 0;
+    std::string resultUID;
+    int segmentCount = wing->GetSegmentCount();
+    gp_Pnt pnt(x, y, z);
+
+    // Quick check if the point even is on this wing
+    BRepClass3d_SolidClassifier quickClassifier;
+
+    quickClassifier.Load(wing->GetLoft()->Shape());
+    quickClassifier.Perform(pnt, 1.0e-2);
+    if((quickClassifier.State() != TopAbs_IN) && (quickClassifier.State() != TopAbs_ON)){
+        return "";
+    }
+
+    // now discover the right segment
+    for (i=1; i <= segmentCount; i++)
+    {
+        // [[CAS_AES]] added check for only handling segments which are contained in the component segment
+        CCPACSWingSegment& segment = static_cast<CCPACSWingSegment&>(wing->GetSegment(i));
+        if (!IsSegmentContained(segment)) {
+            continue;
+        }
+        //Handle_Geom_Surface aSurf = wing->GetUpperSegmentSurface(i);
+        TopoDS_Shape segmentLoft = wing->GetSegment(i).GetLoft()->Shape();
+
+        BRepClass3d_SolidClassifier classifier;
+        classifier.Load(segmentLoft);
+        classifier.Perform(pnt, 1.0e-3);
+        TopAbs_State aState=classifier.State();
+        if((classifier.State() == TopAbs_IN) || (classifier.State() == TopAbs_ON)){
+            resultUID = wing->GetSegment(i).GetUID();
+            break;
+        }
+    }
+
+    return resultUID;
+}
+
+// [[CAS_AES]] added method for checking whether segment is contained in componentSegment
+bool CCPACSWingComponentSegment::IsSegmentContained(const CCPACSWingSegment& segment) const {
+
+    bool isSegmentContained = false;
+    std::string nextElementUID = fromElementUID;
+    int segmentCount = wing->GetSegmentCount();
+
+    for (int i=1; i <= segmentCount; i++) {
+        CCPACSWingSegment& testSegment = (CCPACSWingSegment&) wing->GetSegment(i);
+        std::string innerSectionElementUID = testSegment.GetInnerSectionElementUID();
+        // skip segments with not matching inner element UID
+        if (innerSectionElementUID != nextElementUID) {
+            continue;
+        }
+        if (innerSectionElementUID == toElementUID) {
+            break;
+        }
+        const std::string temp = segment.GetInnerSectionElementUID();
+        //if (innerSectionElementUID == segment.GetInnerSectionElementUID()) {
+        if (innerSectionElementUID == temp) {
+            isSegmentContained = true;
+            break;
+        }
+        nextElementUID = testSegment.GetOuterSectionElementUID();
+    }
+
+    return isSegmentContained;
 }
 
 } // end namespace tigl

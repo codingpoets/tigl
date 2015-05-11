@@ -441,13 +441,13 @@ const std::string& CCPACSWingSegment::GetOuterSectionUID(void)
 }
 
 // Returns the inner section element UID of this segment
-const std::string& CCPACSWingSegment::GetInnerSectionElementUID(void)
+const std::string& CCPACSWingSegment::GetInnerSectionElementUID(void) const
 {
     return innerConnection.GetSectionElementUID();
 }
 
 // Returns the outer section element UID of this segment
-const std::string& CCPACSWingSegment::GetOuterSectionElementUID(void)
+const std::string& CCPACSWingSegment::GetOuterSectionElementUID(void) const
 {
     return outerConnection.GetSectionElementUID();
 }
