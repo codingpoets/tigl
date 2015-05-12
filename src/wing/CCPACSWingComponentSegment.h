@@ -151,6 +151,9 @@ public:
     // [[CAS_AES]] added getter for outer chordline point
     TIGL_EXPORT gp_Pnt GetOuterChordlinePoint(double xsi) const;
 
+    // [[CAS_AES]] added getter for the midplane line between two eta-xsi points
+    TIGL_EXPORT TopoDS_Wire GetMidplaneLine(double etaStart, double xsiStart, double etaEnd, double xsiEnd);
+
     // Returns the segment to a given point on the componentSegment.
     // Returns null if the point is not an that wing!
     // [[CAS_AES]] added const
@@ -211,6 +214,7 @@ private:
     std::string          fromElementUID;       /**< Inner segment uid (root                 */
     std::string          toElementUID;         /**< Outer segment uid (tip)                 */
     CCPACSWing*          wing;                 /**< Parent wing                             */
+    TopoDS_Shape         loft;                 /**< The loft between two sections           */
     double               myVolume;             /**< Volume of this segment                  */
     double               mySurfaceArea;        /**< Surface area of this segment            */
     TopoDS_Shape         upperShape;           /**< Upper shape of this componentSegment    */

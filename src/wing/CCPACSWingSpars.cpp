@@ -19,6 +19,8 @@
 #include "CCPACSWingSpars.h"
 #include "CCPACSWingCSStructure.h"
 #include "CCPACSWingComponentSegment.h"
+#include "CCPACSWingSparPositionUIDs.h"
+#include "CCPACSWingSparPosition.h"
 
 #include "CTiglError.h"
 #include "CTiglLogging.h"
@@ -37,7 +39,8 @@ namespace tigl
 
 CCPACSWingSpars::CCPACSWingSpars(CCPACSWingCSStructure* parentStructure)
     : structure(parentStructure),
-      sparPositions()
+      sparPositions(),
+      sparSegments(this)
 {
     Reset();
 }
@@ -64,6 +67,12 @@ void CCPACSWingSpars::ReadCPACS(TixiDocumentHandle tixiHandle, const std::string
     if (tixiCheckElement(tixiHandle, tempString.c_str()) == SUCCESS){
         sparPositions.ReadCPACS(tixiHandle, tempString);
     }
+
+    // read sparSegments
+    tempString = sparsXPath + "/sparSegments";
+    if (tixiCheckElement(tixiHandle, tempString.c_str()) == SUCCESS){
+        sparSegments.ReadCPACS(tixiHandle, tempString);
+    }
     
     isvalid = true;
 }
@@ -79,8 +88,46 @@ bool CCPACSWingSpars::IsValid() const
     return isvalid;
 }
 
+CCPACSWingComponentSegment& CCPACSWingSpars::GetWingComponentSegment(void) const
+    {
+        return structure->GetComponentSegment();
+    }
+
+CCPACSWingSparPosition& CCPACSWingSpars::GetSparPosition(const std::string& uid)
+    {
+        return sparPositions.GetSparPosition(uid);
+    }
+
 TopoDS_Shape CCPACSWingSpars::GetLoft()
 {
+    // loop over all spar segments
+    for (int i = 0; i < sparSegments.GetSparSegmentCount(); i++) {
+        CCPACSWingSparSegment sparSegment = sparSegments.GetSparSegment(i);
+        // get an ordered list of all the spar points
+        std::vector<double> etas;
+        std::vector<double> xsis;
+        std::vector<gp_Pnt> sparPoints;
+        CCPACSWingSparPositionUIDs positionUIDs = sparSegment.GetSparPositionUIDs();
+        for (int j = 0; j < positionUIDs.GetSparPositionUIDCount(); j++) {
+            // get the spar position from the uid
+            std::string sparPosUID = positionUIDs.GetSparPositionUID(j);
+            CCPACSWingSparPosition sparPosition = sparPositions.GetSparPosition(sparPosUID);
+            // get eta and xsi coordinates of the spar point
+            double eta = sparPosition.GetEta();
+            double xsi = sparPosition.GetXsi();
+            etas.push_back(eta);
+            xsis.push_back(xsi);
+            // get xyz coordinates for the spar point
+            gp_Pnt p = structure->GetComponentSegment().GetPoint(eta, xsi);
+            sparPoints.push_back(p);
+        }
+        // create spar segment wire
+        BRepBuilderAPI_MakeWire wireBuilder;
+        for (int j = 1; j < positionUIDs.GetSparPositionUIDCount(); j++) {
+            TopoDS_Edge edge = BRepBuilderAPI_MakeEdge(sparPoints[j-1], sparPoints[j]);
+            wireBuilder.Add(edge);
+        }
+    }
     // TODO: get two spar points
     double eta1, eta2, eta3, eta4, xsi1, xsi2, xsi3, xsi4;
     std::string sparPosUID1 = "sparPos1";

@@ -23,6 +23,7 @@
 #include "tixi.h"
 
 #include "CCPACSWingSparPositions.h"
+#include "CCPACSWingSparSegments.h"
 
 #include "TopoDS_Shape.hxx"
 
@@ -30,7 +31,7 @@ namespace tigl
 {
 
 class CCPACSWingCSStructure;
-
+class CCPACSWingComponentSegment;
 class CCPACSWingSpars
 {
 public:
@@ -45,9 +46,16 @@ public:
     // Returns the shape containing all spars
     TIGL_EXPORT TopoDS_Shape GetLoft();
 
+    // Returns the component segment this structure belongs to
+    TIGL_EXPORT CCPACSWingComponentSegment& GetWingComponentSegment(void) const;
+
+    // Returns the sparPosition with the passed uid
+    TIGL_EXPORT CCPACSWingSparPosition& GetSparPosition(const std::string& uid);
+
 private:
     CCPACSWingCSStructure* structure; // contains the parent structure node
     CCPACSWingSparPositions sparPositions;
+    CCPACSWingSparSegments sparSegments;
 
     bool isvalid;
 };

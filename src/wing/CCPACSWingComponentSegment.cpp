@@ -516,9 +516,10 @@ PNamedShape CCPACSWingComponentSegment::BuildLoft(void)
     // Set Names
     std::string loftName = GetUID();
     std::string loftShortName = GetShortShapeName();
-    PNamedShape loft (new CNamedShape(loftShape, loftName.c_str(), loftShortName.c_str()));
-    SetFaceTraits(loft, segments.size());
-    return loft;
+    PNamedShape namedLoft (new CNamedShape(loftShape, loftName.c_str(), loftShortName.c_str()));
+    SetFaceTraits(namedLoft, segments.size());
+    loft = namedLoft->Shape();
+    return namedLoft;
 }
 
 void CCPACSWingComponentSegment::UpdateProjectedLeadingEdge()
@@ -1329,6 +1330,124 @@ gp_Pnt CCPACSWingComponentSegment::GetOuterChordlinePoint(double xsi) const
     gp_Vec chordLine(lePnt, tePnt);
     gp_Pnt result = lePnt.Translated(chordLine.Multiplied(xsi));
     return result;
+}
+
+// [[CAS_AES]] added getter for the midplane line between two eta-xsi points
+TopoDS_Wire CCPACSWingComponentSegment::GetMidplaneLine(double etaStart, double xsiStart, double etaEnd, double xsiEnd) {
+    // call update to ensure that the loft geometry was created
+    Update();
+
+    // determine start and end point
+    gp_Pnt startPnt = GetMidplanePoint(etaStart, xsiStart);
+    gp_Pnt endPnt = GetMidplanePoint(etaEnd, xsiEnd);
+    gp_Pnt globalStartPnt = wing->GetWingTransformation().Transform(startPnt);
+    gp_Pnt globalEndPnt = wing->GetWingTransformation().Transform(endPnt);
+
+    // determine wing segments containing the start and end points
+    std::string startSegmentUID = findSegment(globalStartPnt.X(), globalStartPnt.Y(), globalStartPnt.Z());
+    std::string endSegmentUID = findSegment(globalEndPnt.X(), globalEndPnt.Y(), globalEndPnt.Z());
+
+    // use inner segment in case start segment was not found
+    // this can occur when the inner segment has a z-rotation, because of the extension of the leading/trailing edge
+    // for the determination of the ETA line. See CPACS documentation for details
+    bool skipStartPnt = false;
+    bool skipEndPnt = false;
+    if (startSegmentUID == "") {
+        if (etaStart < 0.5) {
+            startSegmentUID = GetInnerSegmentUID();
+        } else {
+            startSegmentUID = GetOuterSegmentUID();
+        }
+        skipStartPnt = true;
+    }
+    if (endSegmentUID == "") {
+        if (etaEnd < 0.5) {
+            endSegmentUID = GetInnerSegmentUID();
+        } else {
+            endSegmentUID = GetOuterSegmentUID();
+        }
+        skipEndPnt = true;
+    }
+
+    BRepBuilderAPI_MakeWire wireBuilder;
+
+    // get minimum and maximum z-value of bounding box
+    Bnd_Box bbox;
+    BRepBndLib::Add(loft, bbox);
+    double zmin, zmax, temp;
+    bbox.Get(temp, temp, zmin, temp, temp, zmax);
+
+    // build cut face
+    gp_Pnt p0 = startPnt;
+    gp_Pnt p1 = startPnt;
+    gp_Pnt p2 = endPnt;
+    gp_Pnt p3 = endPnt;
+    p0.SetZ(zmin);
+    p1.SetZ(zmax);
+    p2.SetZ(zmin);
+    p3.SetZ(zmax);
+    TopoDS_Face cutFace = BuildFace(p0, p1, p2, p3);
+
+    // handle case when start and end point are in the same segment
+    if (startSegmentUID == endSegmentUID) {
+        if (skipStartPnt) {
+            CCPACSWingSegment& segment = (CCPACSWingSegment&)wing->GetSegment(startSegmentUID);
+            gp_Pnt pl = segment.GetPoint(0, 0, true);
+            gp_Pnt pt = segment.GetPoint(0, 1, true);
+            TopoDS_Edge edge = BRepBuilderAPI_MakeEdge(pl, pt);
+            GetIntersectionPoint(cutFace, edge, startPnt);
+        }
+        if (skipEndPnt) {
+            CCPACSWingSegment& segment = (CCPACSWingSegment&)wing->GetSegment(startSegmentUID);
+            gp_Pnt pl = segment.GetPoint(1, 0, true);
+            gp_Pnt pt = segment.GetPoint(1, 1, true);
+            TopoDS_Edge edge = BRepBuilderAPI_MakeEdge(pl, pt);
+            GetIntersectionPoint(cutFace, edge, endPnt);
+        }
+        TopoDS_Edge edge = BRepBuilderAPI_MakeEdge(startPnt, endPnt);
+        wireBuilder.Add(edge);
+        return wireBuilder.Wire();
+    }
+
+    bool inSegment = false;
+    gp_Pnt prevPnt = startPnt;
+    // Iterate over all segments and build midplane line
+    for (int i = 1; i <= wing->GetSegmentCount(); i++)
+    {
+        tigl::CCPACSWingSegment& segment = (tigl::CCPACSWingSegment &) wing->GetSegment(i);
+        if (!inSegment && segment.GetUID() == startSegmentUID) {
+            inSegment = true;
+        }
+
+        if (inSegment) {
+            // add intersection with end section only in case end point is skipped
+            if (segment.GetUID() != endSegmentUID || skipEndPnt) {
+                gp_Pnt pl = segment.GetPoint(1, 0, true);
+                gp_Pnt pt = segment.GetPoint(1, 1, true);
+
+                TopoDS_Edge edge = BRepBuilderAPI_MakeEdge(pl, pt);
+                gp_Pnt nextPnt;
+                if (GetIntersectionPoint(cutFace, edge, nextPnt)) {
+                    // handle case when start point is outside of start segment
+                    if (skipStartPnt && startSegmentUID == segment.GetUID()) {
+                        // intentionally left blank
+                    } else {
+                        TopoDS_Edge edge = BRepBuilderAPI_MakeEdge(prevPnt, nextPnt);
+                        wireBuilder.Add(edge);
+                    }
+                    prevPnt = nextPnt;
+                }
+            }
+            if (segment.GetUID() == endSegmentUID) {
+                if (!skipEndPnt) {
+                    TopoDS_Edge edge = BRepBuilderAPI_MakeEdge(prevPnt, endPnt);
+                    wireBuilder.Add(edge);
+                }
+                break;
+            }
+        }
+    }
+    return wireBuilder.Wire();
 }
 
 // Returns the segment to a given point on the componentSegment.
