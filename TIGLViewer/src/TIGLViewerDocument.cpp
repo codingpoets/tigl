@@ -488,13 +488,6 @@ void TIGLViewerDocument::drawAllFuselagesAndWings( )
             tigl::CCPACSWingSegment& segment = (tigl::CCPACSWingSegment &) wing.GetSegment(i);
             app->getScene()->displayShape(segment.GetLoft()->Shape());
         }
-        for (int i = 1; i <= wing.GetComponentSegmentCount(); i++) {
-            tigl::CCPACSWingComponentSegment& componentSegment = (tigl::CCPACSWingComponentSegment &) wing.GetComponentSegment(i);
-            if (componentSegment.HasStructure() && componentSegment.GetStructure().HasSpars()) {
-                app->getScene()->displayShape(componentSegment.GetStructure().GetSpars().GetLoft());
-            }
-        }
-
 
         if (wing.GetSymmetryAxis() == TIGL_NO_SYMMETRY) {
             continue;
@@ -505,14 +498,6 @@ void TIGLViewerDocument::drawAllFuselagesAndWings( )
             app->getScene()->displayShape(segment.GetMirroredLoft()->Shape(), Quantity_NOC_MirrShapeCol);
         }
 
-        for (int i = 1; i <= wing.GetComponentSegmentCount(); i++) {
-            tigl::CCPACSWingComponentSegment& componentSegment = (tigl::CCPACSWingComponentSegment &) wing.GetComponentSegment(i);
-            TopoDS_Wire compSegLine = componentSegment.GetCSLine(0.1, 0.25, 0.8, 0.55);
-            app->getScene()->displayShape(compSegLine);
-            TopoDS_Shape midplane = componentSegment.GetMidplaneShape();
-            app->getScene()->displayShape(midplane);
-
-        }
     }
 
     // Draw all fuselages
@@ -535,7 +520,26 @@ void TIGLViewerDocument::drawAllFuselagesAndWings( )
     }
 }
 
+void TIGLViewerDocument::drawWingStructure()
+{
+    START_COMMAND();
+    // Draw structure for all wing components
+    for (int w = 1; w <= GetConfiguration().GetWingCount(); w++) {
+        tigl::CCPACSWing& wing = GetConfiguration().GetWing(w);
 
+        for (int i = 1; i <= wing.GetComponentSegmentCount(); i++) {
+            tigl::CCPACSWingComponentSegment& componentSegment = (tigl::CCPACSWingComponentSegment &) wing.GetComponentSegment(i);
+            if (componentSegment.HasStructure() && componentSegment.GetStructure().HasSpars()) {
+                tigl::CCPACSWingSparSegments sparSegments =componentSegment.GetStructure().GetSpars().GetSparSegments();
+                for (int j = 1; j <= sparSegments.GetSparSegmentCount(); j++) {
+                    tigl::CCPACSWingSparSegment sparSeg = sparSegments.GetSparSegment(j);
+                    app->getScene()->displayShape(sparSeg.GetSparGeometry(true));
+                }
+            }
+        }
+
+    }
+}
 
 void TIGLViewerDocument::drawWingProfiles()
 {

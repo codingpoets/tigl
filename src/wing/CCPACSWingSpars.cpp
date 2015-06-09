@@ -89,18 +89,23 @@ bool CCPACSWingSpars::IsValid() const
 }
 
 CCPACSWingComponentSegment& CCPACSWingSpars::GetWingComponentSegment(void) const
-    {
-        return structure->GetComponentSegment();
-    }
+{
+    return structure->GetComponentSegment();
+}
 
 CCPACSWingSparPosition& CCPACSWingSpars::GetSparPosition(const std::string& uid)
-    {
-        return sparPositions.GetSparPosition(uid);
-    }
+{
+    return sparPositions.GetSparPosition(uid);
+}
+
+CCPACSWingSparSegments& CCPACSWingSpars::GetSparSegments()
+{
+    return sparSegments;
+}
 
 TopoDS_Shape CCPACSWingSpars::GetLoft()
 {
-    // loop over all spar segments
+    /*// loop over all spar segments
     for (int i = 0; i < sparSegments.GetSparSegmentCount(); i++) {
         CCPACSWingSparSegment sparSegment = sparSegments.GetSparSegment(i);
         // get an ordered list of all the spar points
@@ -127,7 +132,9 @@ TopoDS_Shape CCPACSWingSpars::GetLoft()
             TopoDS_Edge edge = BRepBuilderAPI_MakeEdge(sparPoints[j-1], sparPoints[j]);
             wireBuilder.Add(edge);
         }
-    }
+        //return wireBuilder.Wire();
+    }*/
+
     // TODO: get two spar points
     double eta1, eta2, eta3, eta4, xsi1, xsi2, xsi3, xsi4;
     std::string sparPosUID1 = "sparPos1";

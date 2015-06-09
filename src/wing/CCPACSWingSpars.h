@@ -52,6 +52,9 @@ public:
     // Returns the sparPosition with the passed uid
     TIGL_EXPORT CCPACSWingSparPosition& GetSparPosition(const std::string& uid);
 
+    // Returns the sparsegments subnode
+    TIGL_EXPORT CCPACSWingSparSegments& GetSparSegments();
+
 private:
     CCPACSWingCSStructure* structure; // contains the parent structure node
     CCPACSWingSparPositions sparPositions;

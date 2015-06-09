@@ -35,25 +35,25 @@ void CCPACSWingSparPositionUIDs::Reset()
     Invalidate();
 }
 
-void CCPACSWingSparPositionUIDs::ReadCPACS(TixiDocumentHandle tixiHandle, const std::string &sparPositionsXPath)
+void CCPACSWingSparPositionUIDs::ReadCPACS(TixiDocumentHandle tixiHandle, const std::string &sparPositionUIDsXPath)
 {
     Reset();
     
     // check path
-    if ( tixiCheckElement(tixiHandle, sparPositionsXPath.c_str()) != SUCCESS) {
-        LOG(ERROR) << "Wing Spar Positions " << sparPositionsXPath << " not found in CPACS file!" << std::endl;
+    if ( tixiCheckElement(tixiHandle, sparPositionUIDsXPath.c_str()) != SUCCESS) {
+        LOG(ERROR) << "Wing Spar Position UIDs " << sparPositionUIDsXPath << " not found in CPACS file!" << std::endl;
         return;
     }
     
     int nsparPositions = 0;
-    if (tixiGetNamedChildrenCount(tixiHandle, sparPositionsXPath.c_str(), "sparPosition", &nsparPositions) != SUCCESS) {
+    if (tixiGetNamedChildrenCount(tixiHandle, sparPositionUIDsXPath.c_str(), "sparPositionUID", &nsparPositions) != SUCCESS) {
         // no spar positions found
         return;
     }
 
     for (int isparPosition = 1; isparPosition <= nsparPositions; ++isparPosition) {
         std::stringstream stream;
-        stream << sparPositionsXPath << "/" << "sparPosition[" << isparPosition << "]";
+        stream << sparPositionUIDsXPath << "/" << "sparPositionUID[" << isparPosition << "]";
 
         // check path
         if ( tixiCheckElement(tixiHandle, stream.str().c_str()) == SUCCESS) {
@@ -63,7 +63,7 @@ void CCPACSWingSparPositionUIDs::ReadCPACS(TixiDocumentHandle tixiHandle, const 
             sparPositionUIDs.push_back((std::string)sparPositionUID);
         }
     }
-    
+
     isvalid = true;
 }
 

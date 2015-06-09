@@ -279,6 +279,12 @@ int CCPACSWing::GetComponentSegmentCount(void)
     return componentSegments.GetComponentSegmentCount();
 }
 
+// Get componentSegments instance
+CCPACSWingComponentSegments & CCPACSWing::GetComponentSegments()
+{
+    return componentSegments;
+}
+
 // Returns the segment for a given index
 CTiglAbstractSegment & CCPACSWing::GetComponentSegment(const int index)
 {

@@ -25,16 +25,7 @@
     </sizepolicy>
    </property>
    <layout class="QVBoxLayout" name="verticalLayout">
-    <property name="leftMargin">
-     <number>0</number>
-    </property>
-    <property name="topMargin">
-     <number>0</number>
-    </property>
-    <property name="rightMargin">
-     <number>0</number>
-    </property>
-    <property name="bottomMargin">
+    <property name="margin">
      <number>0</number>
     </property>
     <item>
@@ -61,7 +52,7 @@
      <x>0</x>
      <y>0</y>
      <width>783</width>
-     <height>21</height>
+     <height>25</height>
     </rect>
    </property>
    <widget class="QMenu" name="fileMenu">
@@ -171,6 +162,7 @@
      <addaction name="drawWingsAction"/>
      <addaction name="drawFusedWingAction"/>
      <addaction name="drawWingShellAction"/>
+     <addaction name="drawWingStructureAction"/>
      <addaction name="drawWingComponentSegmentAction"/>
      <addaction name="drawWingTriangulationAction"/>
      <addaction name="drawWingProfilesAction"/>
@@ -1223,6 +1215,11 @@
   <action name="drawVectorAction">
    <property name="text">
     <string>Draw Vector</string>
+   </property>
+  </action>
+  <action name="drawWingStructureAction">
+   <property name="text">
+    <string>Show Wing Structure</string>
    </property>
   </action>
  </widget>

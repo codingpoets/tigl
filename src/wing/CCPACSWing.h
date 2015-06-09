@@ -86,6 +86,9 @@ public:
     // Get segment count
     TIGL_EXPORT int GetComponentSegmentCount(void);
 
+    // Get componentSegments instance
+    TIGL_EXPORT CCPACSWingComponentSegments & GetComponentSegments();
+
     // Returns the segment for a given index or uid
     TIGL_EXPORT CTiglAbstractSegment & GetComponentSegment(const int index);
     TIGL_EXPORT CTiglAbstractSegment & GetComponentSegment(std::string uid);

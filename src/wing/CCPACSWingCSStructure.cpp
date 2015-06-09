@@ -25,14 +25,16 @@ namespace tigl
 {
 
 CCPACSWingCSStructure::CCPACSWingCSStructure()
-    : spars(this)
+    : spars(this),
+      hasSpars(false)
 {
     Cleanup();
 }
 
 CCPACSWingCSStructure::CCPACSWingCSStructure(CCPACSWingComponentSegment *aComponentSegment)
     : componentSegment(aComponentSegment),
-      spars(this)
+      spars(this),
+      hasSpars(false)
 {
     Cleanup();
 }
@@ -71,6 +73,7 @@ void CCPACSWingCSStructure::ReadCPACS(TixiDocumentHandle tixiHandle, const std::
     tmpPath = structureXPath + "/spars";
     if ( tixiCheckElement(tixiHandle, tmpPath.c_str()) == SUCCESS){
         spars.ReadCPACS(tixiHandle, tmpPath.c_str());
+        hasSpars = true;
     }
     
     isvalid = true;

@@ -43,6 +43,7 @@
 #include "TopoDS_Edge.hxx"
 #include "TopTools_IndexedMapOfShape.hxx"
 #include "TopTools_HSequenceOfShape.hxx"
+#include "TopTools_ListIteratorOfListOfShape.hxx"
 #include "GeomAdaptor_Curve.hxx"
 #include "BRepAdaptor_CompCurve.hxx"
 #include "BRepAdaptor_Curve.hxx"
@@ -50,6 +51,7 @@
 #include "BRep_Builder.hxx"
 #include "BRepBuilderAPI_MakeWire.hxx"
 #include "BRepBuilderAPI_MakeEdge.hxx"
+#include "BRepBuilderAPI_MakeFace.hxx"
 #include "GeomAPI_ProjectPointOnCurve.hxx"
 #include "BRepTools.hxx"
 #include "BRepBuilderAPI_Sewing.hxx"
@@ -57,6 +59,10 @@
 #include "BRepBndLib.hxx"
 #include "BRepFill.hxx"
 #include "BRepExtrema_ExtCF.hxx"
+#include "BRepAlgoAPI_Section.hxx"
+#include "ShapeExtend_WireData.hxx"
+#include "ShapeAnalysis_WireOrder.hxx"
+#include "ShapeAnalysis_Edge.hxx"
 
 #include <Geom2d_Curve.hxx>
 #include <Geom2d_Line.hxx>
@@ -461,6 +467,13 @@ TopoDS_Face BuildFace(const gp_Pnt& p1, const gp_Pnt& p2, const gp_Pnt& p3, cons
     return face;
 }
 
+TopoDS_Face BuildFace(const TopoDS_Wire& wire1, const TopoDS_Wire& wire2)
+{
+    TopoDS_Wire closedWire = CloseWires(wire1, wire2);
+    TopoDS_Face face = BRepBuilderAPI_MakeFace(closedWire);
+    return face;
+}
+
 // Method for finding the intersection point of a face and an edge
 bool GetIntersectionPoint(const TopoDS_Face& face, const TopoDS_Edge& edge, gp_Pnt& dst)
 {
@@ -496,4 +509,337 @@ bool GetIntersectionPoint(const TopoDS_Face& face, const TopoDS_Wire& wire, gp_P
         }
     }
     return false;
+}
+
+TopoDS_Shape CutShapes(const TopoDS_Shape& shape1, const TopoDS_Shape& shape2)
+{
+    BRepAlgoAPI_Section splitter(shape1, shape2, Standard_False);
+    splitter.Approximation(Standard_True);
+    splitter.Build();
+    if (!splitter.IsDone()) {
+        throw tigl::CTiglError("Error cutting shapes in CTiglCommon::cutShapes!");
+    }
+    TopoDS_Shape result = splitter.Shape();
+    return result;
+}
+
+// Method for getting all wires from the passed shape (list of edges)
+void MakeWiresFromConnectedEdges(const TopoDS_Shape& shape, TopTools_ListOfShape& wireList)
+{
+    TopExp_Explorer myEdgeExplorer (shape, TopAbs_EDGE);
+    Handle(TopTools_HSequenceOfShape) Edges = new TopTools_HSequenceOfShape();
+
+    while (myEdgeExplorer.More()) {
+        Edges->Append(TopoDS::Edge(myEdgeExplorer.Current()));
+        myEdgeExplorer.Next();
+    }
+
+    // connect all connected edges to wires and save them in container Edges again
+    double tolerance = 1.0e-7;
+    ShapeAnalysis_FreeBounds::ConnectEdgesToWires(Edges, tolerance, false, Edges);
+    int numWires = Edges->Length();
+
+    std::vector<TopoDS_Wire> Wires;
+
+    // filter duplicated wires
+    for (int wireID=1; wireID <= numWires; wireID++) {
+        bool found = false;
+        TopoDS_Wire wire = TopoDS::Wire(Edges->Value(wireID));
+        for (std::vector<TopoDS_Wire>::size_type i = 0; i < Wires.size(); i++) {
+            if (Wires[i].HashCode(200000) == wire.HashCode(200000)) {
+                    found = true;
+            }
+        }
+
+        if (!found) {
+            Wires.push_back(wire);
+            wireList.Append(wire);
+        }
+    }
+}
+
+void GetListOfShape(const TopoDS_Shape& shape, TopAbs_ShapeEnum type, TopTools_ListOfShape& result)
+{
+    TopTools_IndexedMapOfShape typeMap;
+    TopExp::MapShapes(shape, type, typeMap);
+    for (int i = 1; i <= typeMap.Extent(); i++) {
+        result.Append(typeMap.FindKey(i));
+    }
+}
+
+// Method for finding all directly and indirectly connected edges
+// The method loops over the passed edgeList and checks for each element if it
+// is connected to the passed edge. When an edge is found it is removed from
+// the edgeList and added to the targetList. Additionally for this edge all
+// connected edges are also added to the targetList by recursively calling this
+// method. Finally all directly or indirectly connected edges to the passed
+// edge are moved from the edgeList to the targetList
+void FindAllConnectedEdges(const TopoDS_Edge& edge, TopTools_ListOfShape& edgeList, TopTools_ListOfShape& targetList)
+{
+    TopTools_ListIteratorOfListOfShape edgeIt;
+    TopoDS_Vertex tempVertex;
+    TopoDS_Edge connectedEdge;
+
+    // finished gets true as soon as no more connected edge is found in the edgeList
+    bool finished = false;
+    // loop until all connected e
+    while (!finished) {
+        connectedEdge.Nullify();
+        // iterate over all edges in edgeList, and break when a connected edge was found
+        for (edgeIt.Initialize(edgeList); edgeIt.More(); edgeIt.Next()) {
+            TopoDS_Edge testEdge = TopoDS::Edge(edgeIt.Value());
+
+            // check if edges are connected
+            if (CheckCommonVertex(edge, testEdge)) {
+                connectedEdge = testEdge;
+                break;
+            }
+        }
+        // check if a connected edge was found
+        if (!connectedEdge.IsNull()) {
+            // remove connected edge from edgeList
+            edgeList.Remove(edgeIt);
+            // append connected edge to connectedEdge list
+            targetList.Append(connectedEdge);
+            // append all edges which are connected to the new edge to the list
+            FindAllConnectedEdges(connectedEdge, edgeList, targetList);
+        } else {
+            finished = true;
+        }
+    }
+}
+
+// Method for checking if two edges have a common vertex (same position)
+bool CheckCommonVertex(const TopoDS_Edge& e1, const TopoDS_Edge& e2)
+{
+    TopoDS_Vertex v1First, v1Last, v2First, v2Last;
+    TopExp::Vertices(e1, v1First, v1Last);
+    TopExp::Vertices(e2, v2First, v2Last);
+
+    gp_Pnt p1First = BRep_Tool::Pnt(v1First);
+    gp_Pnt p1Last = BRep_Tool::Pnt(v1Last);
+    gp_Pnt p2First = BRep_Tool::Pnt(v2First);
+    gp_Pnt p2Last = BRep_Tool::Pnt(v2Last);
+
+    if (p1First.Distance(p2First) < Precision::Confusion() ||
+        p1First.Distance(p2Last) < Precision::Confusion() ||
+        p1Last.Distance(p2First) < Precision::Confusion() ||
+        p1Last.Distance(p2Last) < Precision::Confusion()) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+TopoDS_Wire SortWireEdges(const TopoDS_Wire& wire, bool closed)
+{
+    // Inspired by ShapeAnalysis_Wire::CheckOrder
+    ShapeExtend_WireData checkWire(wire);
+
+    // Determine correct order of edges in wire
+    ShapeAnalysis_WireOrder wireOrder(Standard_True /* 3D */, Precision::Confusion());
+    // Use ShapeAnalysis_Edge here, because this returns the correct vertex because it interprets the orientation!!!
+    ShapeAnalysis_Edge checkEdge;
+
+    // iterate over the number of edges
+    int numEdges = checkWire.NbEdges();
+    for (int i  = 1; i <= numEdges; i++) {
+        TopoDS_Edge edge = checkWire.Edge(i);
+        TopoDS_Vertex v1 = checkEdge.FirstVertex(edge);
+        TopoDS_Vertex v2 = checkEdge.LastVertex(edge);
+        gp_Pnt p1 = BRep_Tool::Pnt(v1);
+        gp_Pnt p2 = BRep_Tool::Pnt(v2);
+        // add edges to wireOrder class
+        wireOrder.Add(p1.XYZ(), p2.XYZ());
+    }
+    wireOrder.Perform(closed);
+
+    if (!wireOrder.IsDone()) {
+        throw tigl::CTiglError("Error: wireOrder could not be determined in CTiglCommon::SortWireEdges!");
+    }
+
+    // get status from wireOrder
+    int status = wireOrder.Status();
+    TopoDS_Wire fixedWire;
+
+    if (status == 0) {
+        // wire is ok
+        fixedWire = wire;
+    } else if (status == 1 || status == -1) {
+        // wire is out of order and edges are probably inversed
+        BRepBuilderAPI_MakeWire makeWire;
+        for (int i = 1; i <= numEdges; i++) {
+            int edgeIndex = wireOrder.Ordered(i);
+            bool reverse = false;
+            if (edgeIndex < 0) {
+                reverse = true;
+                edgeIndex = -edgeIndex;
+            }
+            TopoDS_Edge edge = TopoDS::Edge(checkWire.Edge(edgeIndex));
+            if (reverse) {
+                edge.Reverse();
+            }
+            makeWire.Add(edge);
+        }
+        fixedWire = makeWire.Wire();
+    } else {
+        throw tigl::CTiglError("Error: failure determining wire order in CTiglCommon::SortWireEdges!");
+    }
+    return fixedWire;
+}
+
+TopoDS_Wire CloseWire(const TopoDS_Wire& wire)
+{
+    // get the list of end vertices
+    TopTools_ListOfShape endVertices;
+    GetEndVertices(wire, endVertices);
+
+    // determine number of end vertices
+    int numEndVertices = endVertices.Extent();
+
+    // check if wire is already closed
+    if (numEndVertices == 0) {
+        return wire;
+    }
+
+    // check if we have exatcly two end vertices
+    if (numEndVertices != 2) {
+        throw tigl::CTiglError("Error: invalid number of end vertices found in CTiglCommon::closeWire!");
+    }
+
+    // next generate an edge between the end vertices
+    TopoDS_Edge edge = BRepBuilderAPI_MakeEdge(TopoDS::Vertex(endVertices.First()), TopoDS::Vertex(endVertices.Last()));
+
+    // build new wire
+    BRepBuilderAPI_MakeWire makeWire;
+    makeWire.Add(wire);
+    makeWire.Add(edge);
+    if (!makeWire.IsDone()) {
+        throw tigl::CTiglError("Error: unable to build closed wire in CTiglCommon::closeWire!");
+    }
+    TopoDS_Wire result = SortWireEdges(makeWire.Wire(), true);
+    return result;
+}
+
+// determine direction from wire1 by using end vertices
+TopoDS_Wire CloseWires(const TopoDS_Wire& wire1, const TopoDS_Wire& wire2)
+{
+    // get a map of vertices with connected edges
+    TopTools_IndexedDataMapOfShapeListOfShape vertexMap;
+    TopTools_ListOfShape endVertices1, endVertices2;
+
+    TopExp::MapShapesAndAncestors(wire1, TopAbs_VERTEX, TopAbs_EDGE, vertexMap);
+    // filter out all vertices which have only a single edge connected (end vertices)
+    for (int i = 1; i <= vertexMap.Extent(); i++) {
+        const TopTools_ListOfShape& edgeList = vertexMap.FindFromIndex(i);
+        if (edgeList.Extent() == 1) {
+            endVertices1.Append(vertexMap.FindKey(i));
+        }
+    }
+
+    // check for correct number of end vertices
+    if (endVertices1.Extent() != 2) {
+        throw tigl::CTiglError("Error: Unable to close wires because invalid number of end-vertices found!");
+    }
+
+    TopoDS_Vertex& v1 = TopoDS::Vertex(endVertices1.First());
+    TopoDS_Vertex& v2 = TopoDS::Vertex(endVertices1.Last());
+    gp_Pnt p1 = BRep_Tool::Pnt(v1);
+    gp_Pnt p2 = BRep_Tool::Pnt(v2);
+    gp_Vec dir(p1, p2);
+
+    return CloseWires(wire1, wire2, dir);
+}
+
+TopoDS_Wire CloseWires(const TopoDS_Wire& wire1, const TopoDS_Wire& wire2, const gp_Vec& dir)
+{
+    // get a map of vertices with connected edges
+    TopTools_IndexedDataMapOfShapeListOfShape vertexMap;
+    TopTools_ListOfShape endVertices1, endVertices2;
+
+    TopExp::MapShapesAndAncestors(wire1, TopAbs_VERTEX, TopAbs_EDGE, vertexMap);
+    // filter out all vertices which have only a single edge connected (end vertices)
+    for (int i = 1; i <= vertexMap.Extent(); i++) {
+        const TopTools_ListOfShape& edgeList = vertexMap.FindFromIndex(i);
+        if (edgeList.Extent() == 1) {
+            endVertices1.Append(vertexMap.FindKey(i));
+        }
+    }
+    vertexMap.Clear();
+    TopExp::MapShapesAndAncestors(wire2, TopAbs_VERTEX, TopAbs_EDGE, vertexMap);
+    // filter out all vertices which have only a single edge connected (end vertices)
+    for (int i = 1; i <= vertexMap.Extent(); i++) {
+        const TopTools_ListOfShape& edgeList = vertexMap.FindFromIndex(i);
+        if (edgeList.Extent() == 1) {
+            endVertices2.Append(vertexMap.FindKey(i));
+        }
+    }
+
+    // check if number of end vertices is correct
+    int numEndVertices1 = endVertices1.Extent();
+    int numEndVertices2 = endVertices2.Extent();
+    if (numEndVertices1 != 2 || numEndVertices2 != 2) {
+        throw tigl::CTiglError("Error: Unable to close wires because invalid number of end-vertices found!");
+    }
+
+    // sort end vertices according to direction vector
+    TopoDS_Vertex vUpper1 = TopoDS::Vertex(endVertices1.First());
+    TopoDS_Vertex vLower1 = TopoDS::Vertex(endVertices1.Last());
+    gp_Pnt pUpper = BRep_Tool::Pnt(vUpper1);
+    gp_Pnt pLower = BRep_Tool::Pnt(vLower1);
+    gp_Vec vDiff(pLower, pUpper);
+    if (vDiff.Normalized().Dot(dir.Normalized()) < 0) {
+        vUpper1 = TopoDS::Vertex(endVertices1.Last());
+        vLower1 = TopoDS::Vertex(endVertices1.First());
+    }
+    TopoDS_Vertex vUpper2 = TopoDS::Vertex(endVertices2.First());
+    TopoDS_Vertex vLower2 = TopoDS::Vertex(endVertices2.Last());
+    pUpper = BRep_Tool::Pnt(vUpper2);
+    pLower = BRep_Tool::Pnt(vLower2);
+    vDiff = gp_Vec(pLower, pUpper);
+    if (vDiff.Normalized().Dot(dir.Normalized()) < 0) {
+        vUpper2 = TopoDS::Vertex(endVertices2.Last());
+        vLower2 = TopoDS::Vertex(endVertices2.First());
+    }
+
+    // next build the edges and combine the wires to a single wire
+    TopoDS_Edge edge1 = BRepBuilderAPI_MakeEdge(vUpper1, vUpper2);
+    TopoDS_Edge edge2 = BRepBuilderAPI_MakeEdge(vLower1, vLower2);
+
+    // put all edges into a large list
+    TopTools_ListOfShape edgeList;
+    edgeList.Append(edge1);
+    edgeList.Append(edge2);
+    TopoDS_Iterator edgeIt;
+    for (edgeIt.Initialize(wire1); edgeIt.More(); edgeIt.Next()) {
+        edgeList.Append(edgeIt.Value());
+    }
+    for (edgeIt.Initialize(wire2); edgeIt.More(); edgeIt.Next()) {
+        edgeList.Append(edgeIt.Value());
+    }
+
+    BRepBuilderAPI_MakeWire makeWire;
+    makeWire.Add(edgeList);
+    if (!makeWire.IsDone()) {
+        throw tigl::CTiglError("Error: error during creation of closed wire in CTiglCommon::closeWires!");
+    }
+
+    TopoDS_Wire result = SortWireEdges(makeWire.Wire(), true /* closed */);
+
+    return result;
+}
+
+void GetEndVertices(const TopoDS_Shape& shape, TopTools_ListOfShape& endVertices)
+{
+    // get a map of vertices with connected edges
+    TopTools_IndexedDataMapOfShapeListOfShape vertexMap;
+    TopExp::MapShapesAndAncestors(shape, TopAbs_VERTEX, TopAbs_EDGE, vertexMap);
+
+    // filter out all vertices which have only a single edge connected (end vertices)
+    for (int i = 1; i <= vertexMap.Extent(); i++) {
+        const TopTools_ListOfShape& edgeList = vertexMap.FindFromIndex(i);
+        if (edgeList.Extent() == 1) {
+            endVertices.Append(vertexMap.FindKey(i));
+        }
+    }
 }

@@ -146,6 +146,7 @@ CCPACSWingComponentSegment::CCPACSWingComponentSegment(CCPACSWing* aWing, int aS
     , wing(aWing)
     , surfacesAreValid(false)
     , structure(this)
+    , hasStructure(false)
 {
     Cleanup();
 }
@@ -185,6 +186,7 @@ void CCPACSWingComponentSegment::Cleanup(void)
 void CCPACSWingComponentSegment::Update(void)
 {
     Invalidate();
+    BuildLines();
 }
 
 // Read CPACS segment elements
@@ -1340,12 +1342,15 @@ TopoDS_Wire CCPACSWingComponentSegment::GetMidplaneLine(double etaStart, double 
     // determine start and end point
     gp_Pnt startPnt = GetMidplanePoint(etaStart, xsiStart);
     gp_Pnt endPnt = GetMidplanePoint(etaEnd, xsiEnd);
-    gp_Pnt globalStartPnt = wing->GetWingTransformation().Transform(startPnt);
-    gp_Pnt globalEndPnt = wing->GetWingTransformation().Transform(endPnt);
+    //gp_Pnt globalStartPnt = wing->GetWingTransformation().Transform(startPnt);
+    //gp_Pnt globalEndPnt = wing->GetWingTransformation().Transform(endPnt);
 
     // determine wing segments containing the start and end points
-    std::string startSegmentUID = findSegment(globalStartPnt.X(), globalStartPnt.Y(), globalStartPnt.Z());
-    std::string endSegmentUID = findSegment(globalEndPnt.X(), globalEndPnt.Y(), globalEndPnt.Z());
+    //std::string startSegmentUID = findSegment(globalStartPnt.X(), globalStartPnt.Y(), globalStartPnt.Z());
+    //std::string endSegmentUID = findSegment(globalEndPnt.X(), globalEndPnt.Y(), globalEndPnt.Z());
+    std::string startSegmentUID = findSegment(startPnt.X(), startPnt.Y(), startPnt.Z());
+    std::string endSegmentUID = findSegment(endPnt.X(), endPnt.Y(), endPnt.Z());
+
 
     // use inner segment in case start segment was not found
     // this can occur when the inner segment has a z-rotation, because of the extension of the leading/trailing edge

@@ -167,6 +167,56 @@ protected:
     TiglCPACSConfigurationHandle tiglHandle;
 };
 
+class WingComponentSegmentClass : public ::testing::Test
+{
+protected:
+    void SetUpTestCase()
+    {
+        const char* filename = "TestData/CPACS_21_D150.xml";
+        ReturnCode tixiRet;
+        TiglReturnCode tiglRet;
+
+        tiglHandle = -1;
+        tixiHandle = -1;
+
+        tixiRet = tixiOpenDocument(filename, &tixiHandle);
+        ASSERT_TRUE (tixiRet == SUCCESS);
+        tiglRet = tiglOpenCPACSConfiguration(tixiHandle, "D150_VAMP", &tiglHandle);
+        ASSERT_TRUE(tiglRet == TIGL_SUCCESS);
+    }
+
+    void TearDownTestCase()
+    {
+        ASSERT_TRUE(tiglCloseCPACSConfiguration(tiglHandle) == TIGL_SUCCESS);
+        ASSERT_TRUE(tixiCloseDocument(tixiHandle) == SUCCESS);
+        tiglHandle = -1;
+        tixiHandle = -1;
+    }
+
+    virtual void SetUp() {}
+    virtual void TearDown() {}
+
+
+    TixiDocumentHandle           tixiHandle;
+    TiglCPACSConfigurationHandle tiglHandle;
+};
+
+/*
+TEST_F(WingComponentSegmentClass, GetLeadingEdgePoint_success)
+{   // get wing component segment for testing
+    tigl::CCPACSConfigurationManager& manager = tigl::CCPACSConfigurationManager::GetInstance();
+    tigl::CCPACSConfiguration& config = manager.GetConfiguration(tiglHandle);
+    tigl::CCPACSWing& wing = config.GetWing("D150_VAMP_W1");
+    tigl::CCPACSWingComponentSegments compSegs = wing.GetComponentSegments();
+    tigl::CCPACSWingComponentSegment & compSeg = compSegs.GetComponentSegment("D150_VAMP_W1_CompSeg1");
+    //tigl::CCPACSWingComponentSegment& compSeg = (tigl::CCPACSWingComponentSegment &) wing.GetComponentSegment('D150_VAMP_W1_CompSeg1');
+
+    ASSERT_NEAR(1.0, 1.0, 1e-6);
+    //gp_Pnt p = compSeg.GetLeadingEdgePoint(0.0);
+    //ASSERT_NEAR(1.0, p.X(), 1e-6);
+}
+*/
+
 TEST_F(WingComponentSegment, tiglWingGetComponentSegmentCount_success)
 {
     int numCompSeg = 0;
@@ -271,7 +321,6 @@ TEST_F(WingComponentSegment, tiglWingComponentGetEtaXsi_wrongUID)
     TiglReturnCode ret = tiglWingComponentSegmentPointGetSegmentEtaXsi(tiglHandle, "invalid_comp_seg", eta, xsi, &wingUID, &segmentUID, &segmentEta, &segmentXsi);
     ASSERT_TRUE(ret == TIGL_UID_ERROR);
 }
-
 
 TEST_F(WingComponentSegment2, tiglWingComponentGetEtaXsi_success)
 {

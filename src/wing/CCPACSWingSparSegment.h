@@ -43,6 +43,9 @@ public:
     TIGL_EXPORT void Invalidate();
     TIGL_EXPORT bool IsValid() const;
 
+    // Update internal segment data
+    TIGL_EXPORT void Update(void);
+
     // Gets the spar segment uid
     TIGL_EXPORT virtual const std::string& GetUID(void) const;
 
@@ -57,6 +60,15 @@ public:
 
     // Builds the cutting geometry for the spar as well as the midplane line
     TIGL_EXPORT void BuildAuxiliaryGeometry();
+
+    // Getter for the Spar geometry
+    TIGL_EXPORT TopoDS_Shape GetSparGeometry(bool relativeToWing = false);
+
+    // return the cut geometry for the spar
+    TIGL_EXPORT TopoDS_Shape GetSparCutGeometry();
+
+    // Builds the geometry
+    TIGL_EXPORT void BuildGeometry(void);
 
 private:
     std::string uid;
