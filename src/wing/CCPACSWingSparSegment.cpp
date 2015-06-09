@@ -202,10 +202,21 @@ void CCPACSWingSparSegment::BuildAuxiliaryGeometry()
             outerPoint.Translate(bboxSize * sparDir.Normalized());
         }
 
+        // Determine spar up-vector at eta = 0.0
+        // Therefore the rotation is interpreted with reference to the first segment
+        // of the componentSegment
+        double etaRotation = 0.0;
+        gp_Vec etaDir = componentSegment.GetMidplaneEtaDir(etaRotation);
+        gp_Vec normal = componentSegment.GetMidplaneNormal(etaRotation);
+        gp_Vec xsiDir = etaDir.Crossed(normal);
+        gp_Ax1 rotAxis(gp_Pnt(0,0,0), gp_Dir(etaDir));
+        gp_Vec upVec = xsiDir.Rotated(rotAxis, Standard_Real(rotation));
+
+
         // BUG #149 and #152
         // because of issues with the spar up vectors in adjacent component
         // segments the up vector is temporarily set to the z direction
-        upVec = gp_Vec(0,0,1);
+        // upVec = gp_Vec(0,0,1);
         /*
         // determine up-vector based on midplane line of inner spar point
         if (i == 1) {
