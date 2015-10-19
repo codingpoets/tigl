@@ -530,7 +530,7 @@ void TIGLViewerDocument::drawWingStructure()
         for (int i = 1; i <= wing.GetComponentSegmentCount(); i++) {
             tigl::CCPACSWingComponentSegment& componentSegment = (tigl::CCPACSWingComponentSegment &) wing.GetComponentSegment(i);
             if (componentSegment.HasStructure() && componentSegment.GetStructure().HasSpars()) {
-                tigl::CCPACSWingSparSegments sparSegments =componentSegment.GetStructure().GetSpars().GetSparSegments();
+                tigl::CCPACSWingSparSegments sparSegments = componentSegment.GetStructure().GetSpars().GetSparSegments();
                 for (int j = 1; j <= sparSegments.GetSparSegmentCount(); j++) {
                     tigl::CCPACSWingSparSegment sparSeg = sparSegments.GetSparSegment(j);
                     app->getScene()->displayShape(sparSeg.GetSparGeometry(true));
